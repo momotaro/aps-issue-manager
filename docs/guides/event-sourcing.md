@@ -204,7 +204,30 @@ EventProjector.project([event])
 - 現時点では未使用。イベント数が閾値（例: 100件）を超えた場合に導入を検討
 - スナップショットが古くなっても、差分イベントで最新状態に追いつける
 
-## 9. DB スキーマ
+## 9. JSONB と Date 型の取り扱い
+
+イベントペイロード（`issue_events.payload`）やスナップショット（`issue_snapshots.state`）、
+読み取りモデル（`issues_read.photos`）は JSONB カラムに保存される。
+JSONB シリアライズ時に `Date` 型は **ISO 8601 文字列に変換** されるため、
+復元時に明示的なパースが必要。
+
+### 規約
+
+| 操作 | 方針 |
+|------|------|
+| **保存時** | `Date` フィールドは `toISOString()` で正規化して保存 |
+| **復元時** | `new Date(stringValue)` でパースして `Date` に戻す |
+| **対象フィールド** | `Photo.uploadedAt`、スナップショットの `createdAt` / `updatedAt` |
+
+### 実装箇所
+
+- `eventStoreImpl.ts` — `restorePayloadDates()`: イベントペイロード内の Photo.uploadedAt を復元
+- `issueRepositoryImpl.ts` — `restorePhotoDates()` / `snapshotToJson()`: スナップショットの保存・復元
+- `issueQueryServiceImpl.ts` — `restorePhotoDates()`: 読み取りモデルの photos を復元
+
+**新たに Date 型のフィールドを JSONB 内に追加する場合は、上記の復元関数を必ず更新すること。**
+
+## 10. DB スキーマ
 
 スキーマ定義は Drizzle ORM のマイグレーションが正（source of truth）。
 
@@ -218,7 +241,7 @@ EventProjector.project([event])
 - ドメインで `string` なら DB は `NOT NULL`、`string | null` なら NULL 許容
 - コレクション型（`photos` 等）は `NOT NULL DEFAULT '[]'` で空配列を保証
 
-## 10. 関連ファイル
+## 11. 関連ファイル
 
 | ファイル | 内容 |
 |---------|------|
