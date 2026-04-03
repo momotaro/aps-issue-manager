@@ -176,25 +176,25 @@ Phase 3 の計画で特定したドキュメントを更新する。
 | 開発手順変更 | `docs/guides/development.md` |
 | 将来拡張方針 | `docs/guides/future-considerations.md` |
 
-## Phase 10: Commit & PR
+## Phase 10: コードレビュー
 
-`docs/templates/pr-feature.md` のフォーマットに従う。
+`workflow:review:code` スキルを実行し、現在のブランチの差分コードをレビューする。
 
-### コミット
+レビューで指摘があった場合は修正を完了してから Phase 11 に進むこと。
+
+## Phase 11: Publish（Commit & PR & チケット更新）
+
+`docs/templates/pr-feature.md` のフォーマットに従い、以下を決定する:
+
+1. **コミットメッセージ** — `feat: <要約>\n\nCloses #<issue番号>\n\n<詳細>`
+2. **PR タイトル** — `feat: <変更内容>`
+3. **PR ボディ** — テンプレートに沿って作成し、一時ファイルに書き出す
+
+決定後、publish スクリプトで一括実行する:
+
 ```bash
-git add <変更ファイル>
-git commit -m "feat: <変更内容の要約>
-
-Closes #<issue番号>
-
-<詳細な変更内容>"
-```
-
-### PR 作成
-```bash
-gh pr create \
-  --title "feat: <変更内容>" \
-  --body "$(cat <<'EOF'
+# PR ボディを一時ファイルに書き出す
+cat <<'EOF' > /tmp/pr-body.md
 ## 概要
 <変更内容の要約>
 
@@ -205,6 +205,10 @@ Closes #<issue番号>
 - <変更点1>
 - <変更点2>
 
+## 完了の定義
+- [x] <definitionOfDone 項目1>
+- [x] <definitionOfDone 項目2>
+
 ## テスト
 - [x] pnpm test
 - [x] pnpm lint
@@ -214,5 +218,14 @@ Closes #<issue番号>
 ## スクリーンショット（該当する場合）
 <スクリーンショット>
 EOF
-)"
+
+# コミット → プッシュ → PR作成 → Projectチケットを In review に移動
+node .claude/skills/workflow-feature/scripts/publish.mjs <issue番号> \
+  --commit-message "feat: <変更内容の要約>
+
+Closes #<issue番号>
+
+<詳細な変更内容>" \
+  --pr-title "feat: <変更内容>" \
+  --pr-body-file /tmp/pr-body.md
 ```
