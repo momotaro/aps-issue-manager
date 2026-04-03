@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createEventMeta } from "../../domain/events/eventMeta.js";
 import {
   generateId,
@@ -133,11 +133,10 @@ describe("issueQueryServiceImpl（結合テスト）", () => {
   });
 
   it("findAll の結果は updatedAt DESC でソートされる", async () => {
-    vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+    // 確実に時刻差を作るため、sleep で分離
     const e1 = await createIssue({ title: "古い指摘" });
-    vi.setSystemTime(new Date("2026-01-02T00:00:00Z"));
+    await new Promise((r) => setTimeout(r, 50));
     const e2 = await createIssue({ title: "新しい指摘" });
-    vi.useRealTimers();
 
     const items = await queryService.findAll();
     // 後に作成された方が先に来る
