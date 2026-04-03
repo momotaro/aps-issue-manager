@@ -212,6 +212,12 @@ EventProjector.project([event])
 - **マイグレーション**: `backend/drizzle/`
 - **テーブル**: `users`, `projects`, `issue_events`, `issues_read`, `issue_snapshots`
 
+### 読み取りモデルの設計方針
+
+- カラムの NULL 許容性はドメイン型（`IssueDetail` 等）に合わせる
+- ドメインで `string` なら DB は `NOT NULL`、`string | null` なら NULL 許容
+- コレクション型（`photos` 等）は `NOT NULL DEFAULT '[]'` で空配列を保証
+
 ## 10. 関連ファイル
 
 | ファイル | 内容 |
