@@ -78,7 +78,11 @@ const eventToUpdates = (
           FROM jsonb_array_elements(${issuesRead.photos}) AS elem
           WHERE elem->>'id' != ${event.payload.photoId}
         ), '[]'::jsonb)`,
-        photoCount: sql`${issuesRead.photoCount} - 1`,
+        photoCount: sql`jsonb_array_length(COALESCE((
+          SELECT jsonb_agg(elem)
+          FROM jsonb_array_elements(${issuesRead.photos}) AS elem
+          WHERE elem->>'id' != ${event.payload.photoId}
+        ), '[]'::jsonb))`,
       };
   }
 };

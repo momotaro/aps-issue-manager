@@ -104,7 +104,7 @@ const loadSnapshot = async (
     assigneeId: state.assigneeId
       ? parseId<UserId>(state.assigneeId as string)
       : null,
-    photos: state.photos as Issue["photos"],
+    photos: restorePhotoDates(state.photos as Array<Record<string, unknown>>),
     version: state.version as number,
     createdAt: new Date(state.createdAt as string),
     updatedAt: new Date(state.updatedAt as string),
@@ -123,8 +123,25 @@ const snapshotToJson = (issue: Issue): Record<string, unknown> => ({
   position: issue.position,
   reporterId: issue.reporterId,
   assigneeId: issue.assigneeId,
-  photos: issue.photos,
+  photos: issue.photos.map((p) => ({
+    ...p,
+    uploadedAt: p.uploadedAt.toISOString(),
+  })),
   version: issue.version,
   createdAt: issue.createdAt.toISOString(),
   updatedAt: issue.updatedAt.toISOString(),
 });
+
+const restorePhotoDates = (
+  photos: Array<Record<string, unknown>>,
+): Issue["photos"] =>
+  photos.map(
+    (p) =>
+      ({
+        ...p,
+        uploadedAt:
+          typeof p.uploadedAt === "string"
+            ? new Date(p.uploadedAt)
+            : p.uploadedAt,
+      }) as Issue["photos"][number],
+  );

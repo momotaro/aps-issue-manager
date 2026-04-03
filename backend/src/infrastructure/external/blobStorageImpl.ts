@@ -32,6 +32,21 @@ const validateId = (id: string, label: string): void => {
   }
 };
 
+const PENDING_PREFIX = "pending/";
+
+/** confirmPending 時に Photo のパスが正しい pending プレフィックスか検証する。 */
+const validatePendingPath = (issueId: string, photo: Photo): void => {
+  const expectedPrefix = `${PENDING_PREFIX}${issueId}/`;
+  if (!photo.storagePath.startsWith(expectedPrefix)) {
+    throw new Error(
+      `Invalid storage path: expected prefix "${expectedPrefix}", got "${photo.storagePath}"`,
+    );
+  }
+  const ext = photo.storagePath.split(".").pop() ?? "";
+  validateExt(ext);
+  validateId(photo.id, "photoId");
+};
+
 export type BlobStorageConfig = {
   endpoint: string;
   region: string;
@@ -84,6 +99,8 @@ export const createBlobStorage = (config: BlobStorageConfig): BlobStorage => {
 
       const confirmed: Photo[] = [];
       for (const photo of photos) {
+        validatePendingPath(issueId, photo);
+
         const ext = photo.storagePath.split(".").pop() ?? "";
         const newPath = confirmedBlobPath(issueId, photo.phase, photo.id, ext);
 
@@ -111,23 +128,32 @@ export const createBlobStorage = (config: BlobStorageConfig): BlobStorage => {
       validateId(issueId, "issueId");
 
       const prefix = `confirmed/${issueId}/`;
-      const listed = await client.send(
-        new ListObjectsV2Command({
-          Bucket: bucket,
-          Prefix: prefix,
-        }),
-      );
+      let continuationToken: string | undefined;
 
-      if (!listed.Contents || listed.Contents.length === 0) return;
+      do {
+        const listed = await client.send(
+          new ListObjectsV2Command({
+            Bucket: bucket,
+            Prefix: prefix,
+            ContinuationToken: continuationToken,
+          }),
+        );
 
-      await client.send(
-        new DeleteObjectsCommand({
-          Bucket: bucket,
-          Delete: {
-            Objects: listed.Contents.map((obj) => ({ Key: obj.Key })),
-          },
-        }),
-      );
+        if (listed.Contents && listed.Contents.length > 0) {
+          await client.send(
+            new DeleteObjectsCommand({
+              Bucket: bucket,
+              Delete: {
+                Objects: listed.Contents.filter((obj) => obj.Key).map(
+                  (obj) => ({ Key: obj.Key }),
+                ),
+              },
+            }),
+          );
+        }
+
+        continuationToken = listed.NextContinuationToken;
+      } while (continuationToken);
     },
   };
 };
