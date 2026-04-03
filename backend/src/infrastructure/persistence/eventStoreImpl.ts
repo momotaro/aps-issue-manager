@@ -151,19 +151,41 @@ export const createEventStore =
     };
   };
 
+const toRecord = (value: unknown): Record<string, unknown> | null =>
+  typeof value === "object" && value !== null
+    ? (value as Record<string, unknown>)
+    : null;
+
+const readString = (
+  source: Record<string, unknown> | null,
+  key: string,
+): string | undefined => {
+  const value = source?.[key];
+  return typeof value === "string" ? value : undefined;
+};
+
 /** issue_events の UNIQUE(issue_id, version) 制約違反かどうかを判定する。 */
-const isVersionConflict = (error: unknown): boolean => {
-  if (!(error instanceof Error)) return false;
-  const cause = (
-    error as {
-      cause?: { code?: string; constraint_name?: string; detail?: string };
-    }
-  ).cause;
-  if (!cause) return false;
-  if (cause.code !== "23505") return false;
+export const isVersionConflict = (error: unknown): boolean => {
+  const topLevel = toRecord(error);
+  const cause = toRecord(topLevel?.cause);
+
+  const code = readString(cause, "code") ?? readString(topLevel, "code");
+  if (code !== "23505") return false;
+
+  const constraintName =
+    readString(cause, "constraint_name") ??
+    readString(cause, "constraint") ??
+    readString(cause, "constraintName") ??
+    readString(topLevel, "constraint_name") ??
+    readString(topLevel, "constraint") ??
+    readString(topLevel, "constraintName");
+
   // constraint 名で判別（PK 衝突等との誤分類を防止）
-  if (cause.constraint_name === "issue_events_issue_id_version_unique")
-    return true;
+  if (constraintName === "issue_events_issue_id_version_unique") return true;
+
+  const detail =
+    readString(cause, "detail") ?? readString(topLevel, "detail") ?? "";
+
   // フォールバック: detail メッセージで判別
-  return (cause.detail ?? "").includes("issue_id, version");
+  return detail.includes("issue_id, version");
 };

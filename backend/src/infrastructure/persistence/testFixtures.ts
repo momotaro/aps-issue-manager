@@ -15,6 +15,7 @@ import {
   type UserId,
 } from "../../domain/valueObjects/brandedId.js";
 import type { IssueCategory } from "../../domain/valueObjects/issueCategory.js";
+import type { IssueStatus } from "../../domain/valueObjects/issueStatus.js";
 import { createSpatialPosition } from "../../domain/valueObjects/position.js";
 
 export const testActorId = parseId<UserId>(
@@ -72,14 +73,14 @@ export const makeTitleUpdatedEvent = (
 export const makeStatusChangedEvent = (
   issueId: IssueId,
   version: number,
-  from: string,
-  to: string,
+  from: IssueStatus,
+  to: IssueStatus,
 ): IssueDomainEvent =>
   Object.freeze({
     ...createEventMeta(issueId, testActorId, version),
     type: "IssueStatusChanged" as const,
     payload: Object.freeze({ from, to }),
-  }) as IssueDomainEvent;
+  });
 
 export const makeTestUser = (
   overrides?: Partial<{ name: string; email: string }>,

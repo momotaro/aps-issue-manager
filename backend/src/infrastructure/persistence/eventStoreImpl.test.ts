@@ -4,7 +4,7 @@ import {
   generateId,
   type IssueId,
 } from "../../domain/valueObjects/brandedId.js";
-import { createEventStore } from "./eventStoreImpl.js";
+import { createEventStore, isVersionConflict } from "./eventStoreImpl.js";
 import {
   makeIssueCreatedEvent,
   makeTitleUpdatedEvent,
@@ -96,5 +96,59 @@ describe("eventStoreImpl（結合テスト）", () => {
   it("存在しない集約の getEvents は空配列を返す", async () => {
     const events = await eventStore.getEvents(generateId<IssueId>());
     expect(events).toHaveLength(0);
+  });
+});
+
+describe("isVersionConflict", () => {
+  const CONSTRAINT = "issue_events_issue_id_version_unique";
+
+  it("cause に code=23505 と constraint_name がある場合 true を返す", () => {
+    const error = new Error("db error");
+    Object.assign(error, {
+      cause: { code: "23505", constraint_name: CONSTRAINT },
+    });
+    expect(isVersionConflict(error)).toBe(true);
+  });
+
+  it("トップレベルに code=23505 と constraint がある場合 true を返す", () => {
+    const error = { code: "23505", constraint: CONSTRAINT };
+    expect(isVersionConflict(error)).toBe(true);
+  });
+
+  it("cause.constraintName (camelCase) でも判定できる", () => {
+    const error = {
+      cause: { code: "23505", constraintName: CONSTRAINT },
+    };
+    expect(isVersionConflict(error)).toBe(true);
+  });
+
+  it("detail フォールバックで issue_id, version を含む場合 true を返す", () => {
+    const error = {
+      cause: {
+        code: "23505",
+        detail: "Key (issue_id, version)=(xxx, 1) already exists.",
+      },
+    };
+    expect(isVersionConflict(error)).toBe(true);
+  });
+
+  it("code が 23505 でない場合 false を返す", () => {
+    const error = {
+      cause: { code: "23503", constraint_name: CONSTRAINT },
+    };
+    expect(isVersionConflict(error)).toBe(false);
+  });
+
+  it("PK 制約違反（別の constraint 名）の場合 false を返す", () => {
+    const error = {
+      cause: { code: "23505", constraint_name: "issue_events_pkey" },
+    };
+    expect(isVersionConflict(error)).toBe(false);
+  });
+
+  it("null や undefined の場合 false を返す", () => {
+    expect(isVersionConflict(null)).toBe(false);
+    expect(isVersionConflict(undefined)).toBe(false);
+    expect(isVersionConflict("string error")).toBe(false);
   });
 });
