@@ -78,11 +78,33 @@ npx vitest run --coverage
 | Issue 集約 | コマンド関数の成功/失敗、`applyEvent` による状態適用、`rehydrate` によるイベント列からの復元 |
 | Branded ID | 生成の一意性、パース関数の等価性 |
 
+### インフラストラクチャ層（`infrastructure/`）— 結合テスト
+
+Repository / Service 実装は DB・MinIO と直接やり取りするため、結合テストで検証する。
+`docker compose up -d` で PostgreSQL + MinIO を起動した状態で実行する。
+
+| 対象 | テスト内容 |
+|------|-----------|
+| EventStore | イベント追記・取得、楽観的同時実行制御（ConcurrencyError） |
+| EventProjector | IssueCreated の INSERT、各更新イベントの UPDATE |
+| IssueRepository | save → load のラウンドトリップ、スナップショット復元 |
+| IssueQueryService | フィルタ付きクエリ、ソート順、イベント履歴 |
+| UserRepository | CRUD + findByEmail、upsert |
+| ProjectRepository | CRUD、upsert |
+| BlobStorage | pending → confirmed ライフサイクル、一括削除 |
+
+#### テスト基盤
+
+- テストヘルパー: `infrastructure/persistence/testHelper.ts`（DB 接続管理 + テーブルクリア）
+- テストフィクスチャ: `infrastructure/persistence/testFixtures.ts`（ドメインオブジェクトファクトリ）
+- `beforeEach` でテーブルをクリアし、テスト間の独立性を保証
+- `afterAll` で DB 接続をクローズ
+- `fileParallelism: false` で全テストファイルを逐次実行（共有 DB の競合防止）
+
 ### テスト対象外（現時点）
 
 | 対象 | 理由 |
 |------|------|
-| Repository 実装 | DB 依存。結合テストで扱う |
 | API エンドポイント | HTTP 依存。E2E テストで扱う |
 | User / Project エンティティ | バリデーションが DomainError の throw のみで、単体テストの費用対効果が低い |
 
@@ -156,3 +178,6 @@ it("コマンド → イベント → 状態適用の一連を検証する", () 
 ドメイン層は純粋関数のみで構成されており、テストのコストが低い。
 カバレッジの漏れはビジネスロジックの検証漏れに直結するため、
 100% を維持する。
+
+インフラストラクチャ層は結合テストで全インターフェースメソッドを網羅する。
+正常系・異常系・境界値の3観点を必ずカバーする。

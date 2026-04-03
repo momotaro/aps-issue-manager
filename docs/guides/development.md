@@ -56,3 +56,25 @@ cp backend/.env.sample backend/.env
 
 - `frontend/.env` — 公開値のみ（`NEXT_PUBLIC_*`）
 - `backend/.env` — DB, MinIO, APS シークレット含む
+
+## 6. テスト実行
+
+### 単体テスト
+
+```bash
+pnpm --filter backend test
+```
+
+### 結合テスト（前提: Docker 起動）
+
+結合テストは PostgreSQL と MinIO に接続するため、事前に Docker を起動しておく必要がある。
+
+```bash
+# 1. Docker 起動（DB + MinIO）
+docker compose up -d
+
+# 2. テスト実行（単体 + 結合テストが一括で実行される）
+pnpm --filter backend test
+```
+
+結合テストは `fileParallelism: false` で逐次実行される（共有 DB の競合防止）。
