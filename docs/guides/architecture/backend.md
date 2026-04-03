@@ -1,0 +1,127 @@
+# バックエンド設計の詳細
+
+## 依存方向の設計意図
+
+```
+presentation → application → domain ← infrastructure
+```
+
+- `domain` はどこにも依存しない（純粋なビジネスロジック）
+- `infrastructure` は `domain` のインターフェースを実装する（依存性逆転）
+- `application` は `domain` のインターフェースに依存し、`infrastructure` の具体実装を知らない
+
+## DI：高階関数パターン
+
+DI コンテナやデコレータを使わず、高階関数で依存を注入する。
+`init` 関数が依存を受け取り、ユースケース群を返すことで、
+ワイヤリングを Composition Root に集約し、テスト時はモックに差し替える。
+
+### 実装例
+
+```typescript
+// domain/repositories/issueRepository.ts
+type IssueRepository = {
+    findById: (id: string) => Promise<Issue | null>;
+    save: (issue: Issue) => Promise<void>;
+};
+
+// domain/services/blobStorage.ts
+type BlobStorage = {
+    confirmPending: (issueId: string, photos: Photo[]) => Promise<void>;
+};
+
+// application/useCases/issueUseCases.ts
+type IssueUseCases = {
+    create: (input: CreateIssueInput) => Promise<Issue>;
+    updateStatus: (id: string, status: Status) => Promise<Issue>;
+};
+
+const initIssueUseCases = (
+    repo: IssueRepository,
+    storage: BlobStorage,
+): IssueUseCases => ({
+    create: async (input) => {
+        const issue = Issue.create(input);
+        await repo.save(issue);
+        if (input.photos.length > 0) {
+            await storage.confirmPending(issue.id, input.photos);
+        }
+        return issue;
+    },
+    updateStatus: async (id, status) => {
+        const issue = await repo.findById(id);
+        if (!issue) throw new NotFoundError("Issue", id);
+        issue.changeStatus(status);
+        await repo.save(issue);
+        return issue;
+    },
+});
+
+// infrastructure/persistence/issueRepositoryImpl.ts
+const createIssueRepository = (db: Database): IssueRepository => ({
+    findById: async (id) => {
+        const row = await db.query("SELECT * FROM issues WHERE id = $1", [id]);
+        return row ? toEntity(row) : null;
+    },
+    save: async (issue) => {
+        await db.query("INSERT INTO issues ...", toRow(issue));
+    },
+});
+
+// compositionRoot.ts — 依存の組み立てを一箇所に集約
+const db = createDatabase(process.env.DATABASE_URL);
+const issueRepo = createIssueRepository(db);
+const blobStorage = createBlobStorage(minioClient);
+
+export const issueUseCases = initIssueUseCases(issueRepo, blobStorage);
+
+// presentation/routes/issues.ts — ルートは依存を意識しない
+import { issueUseCases } from "../../compositionRoot";
+
+app.post("/issues", async (c) => {
+    const result = await issueUseCases.create(input);
+    return c.json(result, 201);
+});
+
+// テスト — モックの注入
+const mockRepo: IssueRepository = {
+    findById: async () => null,
+    save: async () => {},
+};
+const mockStorage: BlobStorage = {
+    confirmPending: async () => {},
+};
+const testUseCases = initIssueUseCases(mockRepo, mockStorage);
+```
+
+## ステータス遷移
+
+指摘のステータスは以下の順序で遷移する:
+
+```
+Open → In Progress → In Review → Done
+                   ↖︎            ↙︎
+                    (差し戻し)
+```
+
+- **Open**: 新規登録された指摘
+- **In Progress**: 是正作業中
+- **In Review**: 是正完了、管理者による確認待ち
+- **Done**: 確認完了
+
+遷移ルールは `domain/valueObjects/` で定義し、不正な遷移をドメイン層で防止する。
+差し戻し（In Review → In Progress）により、是正のやり直しフローに対応する。
+
+## CQRS の設計方針
+
+読み取り（Query）と書き込み（Command）の責務を分離する。
+
+- **Command**: ドメインモデルを経由し、バリデーション・状態遷移を適用
+- **Query**: パフォーマンス優先で、必要に応じてドメインモデルをバイパス可能
+
+件数増加時は Query 側のみ最適化（専用ビュー、キャッシュ等）可能な設計。
+
+## NullObject パターン
+
+必要な箇所で適切に適用する。
+例: 写真が0枚の指摘、未割り当ての担当者など、null チェックの散乱を防ぐ。

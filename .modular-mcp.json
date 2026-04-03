@@ -1,0 +1,31 @@
+{
+  "$schema": "https://raw.githubusercontent.com/d-kimuson/modular-mcp/refs/heads/main/config-schema.json",
+  "mcpServers": {
+    "chrome-devtools": {
+      "description": "ブラウザでデバッグやパフォーマンス分析を行う時に使用してください",
+      "type": "stdio",
+      "command": "npx",
+      "args": ["chrome-devtools-mcp@latest"],
+      "env": {}
+    },
+    "playwright": {
+      "description": "ブラウザで探索的テストやフォームの動作確認、デザインレビューを行う時に使用してください",
+      "type": "stdio",
+      "command": "npx",
+      "args": ["@playwright/mcp@latest"],
+      "env": {}
+    },
+    "next-devtools": {
+      "description": "Next.js アプリケーションのパフォーマンス分析やデバッグを行う時、Next.js のドキュメントを探す時に使用してください",
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "next-devtools-mcp@latest"]
+    },
+    "postgres": {
+      "description": "PostgreSQL データベースのスキーマ確認、クエリ実行、マイグレーションのデバッグを行う時に使用してください",
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-postgres", "postgresql://postgres:postgres@localhost:5432/issue_management"]
+    }
+  }
+}

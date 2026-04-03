@@ -1,0 +1,15 @@
+{
+  "name": "issue-management-tool",
+  "private": true,
+  "scripts": {
+    "dev:frontend": "pnpm --filter frontend dev",
+    "dev:backend": "pnpm --filter backend dev",
+    "build": "pnpm -r build",
+    "lint": "biome check frontend backend",
+    "format": "biome check --fix frontend backend",
+    "test": "pnpm -r test"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.10"
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "deny": ["Read(./.env)", "Read(**/.env)"]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path // .tool_response.filePath' | { read -r f; [[ \"$f\" =~ \\.(ts|tsx|js|jsx|json)$ ]] && npx @biomejs/biome check --fix \"$f\" || true; }",
+            "timeout": 30,
+            "statusMessage": "Running Biome lint & format..."
+          },
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path // .tool_response.filePath' | { read -r f; [[ \"$f\" =~ \\.(ts|tsx)$ ]] || exit 0; if [[ \"$f\" =~ \\.(test|spec)\\.(ts|tsx)$ ]]; then t=\"$f\"; else t=\"${f%.*}.test.${f##*.}\"; fi; [ -f \"$t\" ] && npx vitest run \"$t\" || true; }",
+            "timeout": 60,
+            "statusMessage": "Running related tests..."
+          }
+        ]
+      }
+    ]
+  }
+}

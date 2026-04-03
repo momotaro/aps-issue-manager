@@ -1,0 +1,56 @@
+# 開発ガイド
+
+> コマンド・ポート一覧・ディレクトリ構成は `CLAUDE.md` を参照。
+> 本ドキュメントでは環境構築の詳細と運用ノウハウを記述する。
+
+## 1. 前提条件
+
+- Node.js 22
+- pnpm
+- Docker / Docker Compose
+
+## 2. アクセス URL
+
+| サービス       | URL                          |
+| -------------- | ---------------------------- |
+| Frontend       | http://localhost:3000        |
+| Backend        | http://localhost:4000        |
+| Backend Health | http://localhost:4000/health |
+| MinIO Console  | http://localhost:9001        |
+
+## 3. Hot Reload
+
+Docker 環境でもホットリロードに対応している:
+
+- **Frontend**: `next dev` が HMR を提供。ソースディレクトリをボリュームマウント
+- **Backend**: `tsx watch` がファイル変更を検知して自動再起動
+
+## 4. Biome 設定
+
+Biome v2 をルートに配置し、全ワークスペースを一括管理する。
+
+- インデント: スペース（2幅）
+- クォート: ダブルクォート
+- import 自動整理: 有効
+- 推奨ルール: 有効
+
+## 5. Docker コンテナ詳細
+
+### minio-cleanup
+
+起動時にバケット `issues` を作成し、その後 Orphan ファイルの定期クリーンアップを実行する常駐コンテナ。
+
+- バケット作成: `mc mb --ignore-existing local/issues`
+- クリーンアップ: 5分間隔で `pending/` 内の10分以上経過したファイルを削除
+
+### 環境変数
+
+各サービスの `.env.sample` をコピーして `.env` を作成する:
+
+```bash
+cp frontend/.env.sample frontend/.env
+cp backend/.env.sample backend/.env
+```
+
+- `frontend/.env` — 公開値のみ（`NEXT_PUBLIC_*`）
+- `backend/.env` — DB, MinIO, APS シークレット含む
