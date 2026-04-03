@@ -9,17 +9,21 @@
     "lint": "pnpm -w lint",
     "format": "pnpm -w format",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "migrate": "drizzle-kit migrate"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.12",
+    "drizzle-orm": "^0.45.2",
     "hono": "^4.12.9",
+    "postgres": "^3.4.8",
     "short-uuid": "^6.0.3",
     "uuidv7": "^1.2.1"
   },
   "devDependencies": {
     "@types/node": "^20.19.37",
     "@vitest/coverage-v8": "^4.1.2",
+    "drizzle-kit": "^0.31.10",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vitest": "^4.1.2"

@@ -204,55 +204,13 @@ EventProjector.project([event])
 - 現時点では未使用。イベント数が閾値（例: 100件）を超えた場合に導入を検討
 - スナップショットが古くなっても、差分イベントで最新状態に追いつける
 
-## 9. DB スキーマ（想定）
+## 9. DB スキーマ
 
-### イベントストア
+スキーマ定義は Drizzle ORM のマイグレーションが正（source of truth）。
 
-```sql
-CREATE TABLE issue_events (
-  id          UUID PRIMARY KEY,               -- UUID v7
-  issue_id    UUID     NOT NULL,
-  type        VARCHAR  NOT NULL,
-  payload     JSONB    NOT NULL,
-  actor_id    UUID     NOT NULL,
-  version     INTEGER  NOT NULL,
-  occurred_at TIMESTAMPTZ NOT NULL,
-  UNIQUE (issue_id, version)                 -- 同時実行制御 + 順序保証
-);
-```
-
-### 読み取りモデル（投影テーブル）
-
-```sql
-CREATE TABLE issues_read (
-  id            UUID PRIMARY KEY,
-  project_id    UUID     NOT NULL,
-  title         VARCHAR  NOT NULL,
-  description   TEXT,
-  status        VARCHAR  NOT NULL,
-  category      VARCHAR  NOT NULL,
-  position_type VARCHAR  NOT NULL,
-  position_data JSONB    NOT NULL,
-  reporter_id   UUID     NOT NULL,
-  assignee_id   UUID,
-  photo_count   INTEGER  DEFAULT 0,
-  photos        JSONB,
-  version       INTEGER  NOT NULL,
-  created_at    TIMESTAMPTZ NOT NULL,
-  updated_at    TIMESTAMPTZ NOT NULL
-);
-```
-
-### スナップショット（任意）
-
-```sql
-CREATE TABLE issue_snapshots (
-  issue_id   UUID PRIMARY KEY,
-  state      JSONB    NOT NULL,
-  version    INTEGER  NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL
-);
-```
+- **スキーマ定義**: `backend/src/infrastructure/persistence/schema.ts`
+- **マイグレーション**: `backend/drizzle/`
+- **テーブル**: `users`, `projects`, `issue_events`, `issues_read`, `issue_snapshots`
 
 ## 10. 関連ファイル
 
