@@ -112,14 +112,15 @@ Open → In Progress → In Review → Done
 遷移ルールは `domain/valueObjects/` で定義し、不正な遷移をドメイン層で防止する。
 差し戻し（In Review → In Progress）により、是正のやり直しフローに対応する。
 
-## CQRS の設計方針
+## CQRS + イベントソーシング
 
 読み取り（Query）と書き込み（Command）の責務を分離する。
+Issue 集約の状態変化はイベントソーシングで記録し、監査証跡の土台とする。
 
-- **Command**: ドメインモデルを経由し、バリデーション・状態遷移を適用
-- **Query**: パフォーマンス優先で、必要に応じてドメインモデルをバイパス可能
+- **Command**: コマンド関数がビジネスルールを検証し、ドメインイベントを生成 → EventStore に追記
+- **Query**: 投影テーブルから直接取得。イベントや集約を経由しない
 
-件数増加時は Query 側のみ最適化（専用ビュー、キャッシュ等）可能な設計。
+詳細: [`event-sourcing.md`](../event-sourcing.md)
 
 ## NullObject パターン
 
