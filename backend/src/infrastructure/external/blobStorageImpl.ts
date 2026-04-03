@@ -34,17 +34,26 @@ const validateId = (id: string, label: string): void => {
 
 const PENDING_PREFIX = "pending/";
 
-/** confirmPending 時に Photo のパスが正しい pending プレフィックスか検証する。 */
+/** confirmPending 時に Photo のパスが `pending/{issueId}/{photoId}.{ext}` と完全一致するか厳密に検証する。 */
 const validatePendingPath = (issueId: string, photo: Photo): void => {
-  const expectedPrefix = `${PENDING_PREFIX}${issueId}/`;
-  if (!photo.storagePath.startsWith(expectedPrefix)) {
+  validateId(issueId, "issueId");
+  validateId(photo.id, "photoId");
+
+  const escaped = PENDING_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(
+    `^${escaped}${issueId}/${photo.id}\\.([^.\\\\/]+)$`,
+    "i",
+  );
+  const match = pattern.exec(photo.storagePath);
+
+  if (!match) {
     throw new Error(
-      `Invalid storage path: expected prefix "${expectedPrefix}", got "${photo.storagePath}"`,
+      `Invalid storage path: expected "${PENDING_PREFIX}${issueId}/${photo.id}.{ext}", got "${photo.storagePath}"`,
     );
   }
-  const ext = photo.storagePath.split(".").pop() ?? "";
+
+  const [, ext] = match;
   validateExt(ext);
-  validateId(photo.id, "photoId");
 };
 
 export type BlobStorageConfig = {

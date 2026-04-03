@@ -45,7 +45,7 @@ const toDomain = (row: EventRow): IssueDomainEvent => {
 };
 
 /** JSONB payload 内の Date フィールドを文字列から Date に復元する。 */
-const restorePayloadDates = (
+export const restorePayloadDates = (
   type: string,
   payload: Record<string, unknown>,
 ): Record<string, unknown> => {

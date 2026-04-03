@@ -12,6 +12,7 @@ import type { IssueCategory } from "../../domain/valueObjects/issueCategory.js";
 import type { IssueStatus } from "../../domain/valueObjects/issueStatus.js";
 import type { Photo } from "../../domain/valueObjects/photo.js";
 import type { Position } from "../../domain/valueObjects/position.js";
+import { restorePayloadDates } from "./eventStoreImpl.js";
 import { issueEvents, issuesRead, users } from "./schema.js";
 import type { Db } from "./types.js";
 
@@ -98,7 +99,10 @@ export const createIssueQueryService = (db: Db): IssueQueryService => ({
           actorId: parseId(row.actorId),
           version: row.version,
           type: row.type,
-          payload: row.payload,
+          payload: restorePayloadDates(
+            row.type,
+            row.payload as Record<string, unknown>,
+          ),
         }) as IssueDomainEvent,
     );
   },

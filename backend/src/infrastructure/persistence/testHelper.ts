@@ -5,8 +5,18 @@ import * as schema from "./schema.js";
 import type { Db } from "./types.js";
 
 const TEST_DATABASE_URL =
-  process.env.DATABASE_URL ??
-  "postgres://postgres:postgres@localhost:5432/issue_management";
+  process.env.TEST_DATABASE_URL ??
+  "postgres://postgres:postgres@localhost:5432/issue_management_test";
+
+if (
+  TEST_DATABASE_URL.includes("issue_management") &&
+  !TEST_DATABASE_URL.includes("_test")
+) {
+  throw new Error(
+    "TEST_DATABASE_URL must point to a test database (name should contain '_test'). " +
+      "Set TEST_DATABASE_URL explicitly to avoid accidental data loss in development DB.",
+  );
+}
 
 let _client: ReturnType<typeof postgres> | null = null;
 let _db: Db | null = null;

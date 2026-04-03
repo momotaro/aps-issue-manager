@@ -10,12 +10,20 @@ import { createIssueRepository } from "./infrastructure/persistence/issueReposit
 import { createProjectRepository } from "./infrastructure/persistence/projectRepositoryImpl.js";
 import { createUserRepository } from "./infrastructure/persistence/userRepositoryImpl.js";
 
+const requireEnv = (name: string): string => {
+  const value = process.env[name];
+  if (value == null || value.trim() === "") {
+    throw new Error(`Missing required environment variable: ${name}`);
+  }
+  return value;
+};
+
 const blobConfig: BlobStorageConfig = {
-  endpoint: process.env.MINIO_ENDPOINT ?? "http://localhost:9000",
-  region: process.env.MINIO_REGION ?? "us-east-1",
-  bucket: process.env.MINIO_BUCKET ?? "issues",
-  accessKeyId: process.env.MINIO_ACCESS_KEY ?? "minioadmin",
-  secretAccessKey: process.env.MINIO_SECRET_KEY ?? "minioadmin",
+  endpoint: requireEnv("MINIO_ENDPOINT"),
+  region: requireEnv("MINIO_REGION"),
+  bucket: requireEnv("MINIO_BUCKET"),
+  accessKeyId: requireEnv("MINIO_ACCESS_KEY"),
+  secretAccessKey: requireEnv("MINIO_SECRET_KEY"),
 };
 
 // --- Factory ---

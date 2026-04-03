@@ -105,7 +105,7 @@ const loadSnapshot = async (
       ? parseId<UserId>(state.assigneeId as string)
       : null,
     photos: restorePhotoDates(state.photos as Array<Record<string, unknown>>),
-    version: state.version as number,
+    version: row.version,
     createdAt: new Date(state.createdAt as string),
     updatedAt: new Date(state.updatedAt as string),
   };
