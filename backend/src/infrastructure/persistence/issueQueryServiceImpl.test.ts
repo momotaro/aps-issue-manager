@@ -1,8 +1,10 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { createEventMeta } from "../../domain/events/eventMeta.js";
 import {
   generateId,
   type IssueId,
   type ProjectId,
+  type UserId,
 } from "../../domain/valueObjects/brandedId.js";
 import { createEventProjector } from "./eventProjectorImpl.js";
 import { createEventStore } from "./eventStoreImpl.js";
@@ -12,6 +14,7 @@ import {
   makeIssueCreatedEvent,
   makeStatusChangedEvent,
   makeTestUser,
+  testActorId,
   testProjectId,
   testReporterId,
 } from "./testFixtures.js";
@@ -109,6 +112,24 @@ describe("issueQueryServiceImpl（結合テスト）", () => {
 
     const items = await queryService.findAll({ category: "safety_hazard" });
     expect(items).toHaveLength(1);
+  });
+
+  it("findAll で assigneeId フィルタが効く", async () => {
+    const assigneeId = generateId<UserId>();
+    const e1 = await createIssue();
+    // e1 に担当者を割り当て
+    const assignEvent = {
+      ...createEventMeta(e1.issueId, testActorId, 2),
+      type: "IssueAssigneeChanged" as const,
+      payload: { assigneeId },
+    };
+    await issueRepo.save(e1.issueId, [assignEvent], 1);
+
+    await createIssue(); // 担当者なし
+
+    const items = await queryService.findAll({ assigneeId });
+    expect(items).toHaveLength(1);
+    expect(items[0].id).toBe(e1.issueId);
   });
 
   it("findAll の結果は updatedAt DESC でソートされる", async () => {

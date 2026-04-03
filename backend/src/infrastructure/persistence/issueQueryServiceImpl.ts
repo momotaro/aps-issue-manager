@@ -12,7 +12,7 @@ import type { IssueCategory } from "../../domain/valueObjects/issueCategory.js";
 import type { IssueStatus } from "../../domain/valueObjects/issueStatus.js";
 import type { Photo } from "../../domain/valueObjects/photo.js";
 import type { Position } from "../../domain/valueObjects/position.js";
-import { restorePayloadDates } from "./eventStoreImpl.js";
+import { toDomain } from "./eventStoreImpl.js";
 import { issueEvents, issuesRead, users } from "./schema.js";
 import type { Db } from "./types.js";
 
@@ -90,21 +90,7 @@ export const createIssueQueryService = (db: Db): IssueQueryService => ({
       .where(eq(issueEvents.issueId, id))
       .orderBy(asc(issueEvents.version));
 
-    return rows.map(
-      (row) =>
-        ({
-          id: parseId(row.id),
-          issueId: parseId(row.issueId),
-          occurredAt: row.occurredAt,
-          actorId: parseId(row.actorId),
-          version: row.version,
-          type: row.type,
-          payload: restorePayloadDates(
-            row.type,
-            row.payload as Record<string, unknown>,
-          ),
-        }) as IssueDomainEvent,
-    );
+    return rows.map(toDomain);
   },
 });
 

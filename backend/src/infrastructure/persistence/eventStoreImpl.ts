@@ -11,7 +11,7 @@ import { parseId } from "../../domain/valueObjects/brandedId.js";
 import { issueEvents } from "./schema.js";
 import type { Db, Tx } from "./types.js";
 
-type EventRow = typeof issueEvents.$inferSelect;
+export type EventRow = typeof issueEvents.$inferSelect;
 
 const toRow = (event: IssueDomainEvent) => ({
   id: event.id,
@@ -23,7 +23,7 @@ const toRow = (event: IssueDomainEvent) => ({
   occurredAt: event.occurredAt,
 });
 
-const toDomain = (row: EventRow): IssueDomainEvent => {
+export const toDomain = (row: EventRow): IssueDomainEvent => {
   const meta: EventMeta = {
     id: parseId(row.id),
     issueId: parseId(row.issueId),
@@ -117,11 +117,15 @@ export const createEventStore =
         } catch (error: unknown) {
           // UNIQUE(issue_id, version) 違反のみ ConcurrencyError に変換
           if (isVersionConflict(error)) {
-            throw new ConcurrencyError(
-              aggregateId,
-              expectedVersion,
-              expectedVersion,
-            );
+            // 正確な actualVersion を再取得
+            const rows = await executor
+              .select({ version: issueEvents.version })
+              .from(issueEvents)
+              .where(eq(issueEvents.issueId, aggregateId))
+              .orderBy(desc(issueEvents.version))
+              .limit(1);
+            const actual = rows.length > 0 ? rows[0].version : 0;
+            throw new ConcurrencyError(aggregateId, expectedVersion, actual);
           }
           throw error;
         }

@@ -150,6 +150,10 @@ describe("eventProjectorImpl（結合テスト）", () => {
       .from(issuesRead)
       .where(eq(issuesRead.id, created.issueId));
     expect(rows[0].photoCount).toBe(1);
+    const photos = rows[0].photos as Array<{ id: string; fileName: string }>;
+    expect(photos).toHaveLength(1);
+    expect(photos[0].id).toBe(photo.id);
+    expect(photos[0].fileName).toBe("test.jpg");
   });
 
   it("PhotoRemoved で photoCount がデクリメントされる", async () => {
@@ -182,5 +186,7 @@ describe("eventProjectorImpl（結合テスト）", () => {
       .from(issuesRead)
       .where(eq(issuesRead.id, created.issueId));
     expect(rows[0].photoCount).toBe(0);
+    const photos = rows[0].photos as Array<unknown>;
+    expect(photos).toHaveLength(0);
   });
 });
