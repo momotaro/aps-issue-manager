@@ -11,7 +11,7 @@
  * 3. `pending/` の10分超過ファイルは minio-cleanup が自動削除
  */
 
-import type { Photo } from "../valueObjects/photo.js";
+import type { Photo, PhotoPhase } from "../valueObjects/photo.js";
 
 /**
  * Blob ストレージのインターフェース。
@@ -62,4 +62,27 @@ export type BlobStorage = {
    * @param issueId - 対象の指摘 ID
    */
   readonly deleteByIssue: (issueId: string) => Promise<void>;
+
+  /**
+   * 写真アップロード用の Presigned URL を発行する。
+   *
+   * @param issueId - 対象の指摘 ID
+   * @param photoId - 写真の ID
+   * @param fileName - 元のファイル名
+   * @param phase - 撮影フェーズ
+   * @returns Presigned URL
+   */
+  readonly generateUploadUrl: (
+    issueId: string,
+    photoId: string,
+    fileName: string,
+    phase: PhotoPhase,
+  ) => Promise<{ uploadUrl: string }>;
+
+  /**
+   * 写真ファイルを個別に削除する。
+   *
+   * @param storagePath - 削除対象のストレージパス
+   */
+  readonly deletePhoto: (storagePath: string) => Promise<void>;
 };
