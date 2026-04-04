@@ -28,14 +28,21 @@ import {
 export const getIssueDetailUseCase =
   (queryService: IssueQueryService) =>
   async (id: IssueId): Promise<Result<IssueDetail, DomainErrorDetail>> => {
-    const detail = await queryService.findById(id);
+    try {
+      const detail = await queryService.findById(id);
 
-    if (detail === null) {
+      if (detail === null) {
+        return err({
+          code: "ISSUE_NOT_FOUND",
+          message: `Issue not found: ${id}`,
+        });
+      }
+
+      return ok(detail);
+    } catch (error) {
       return err({
-        code: "ISSUE_NOT_FOUND",
-        message: `Issue not found: ${id}`,
+        code: "QUERY_FAILED",
+        message: `Failed to get issue detail: ${error instanceof Error ? error.message : String(error)}`,
       });
     }
-
-    return ok(detail);
   };

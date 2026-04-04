@@ -118,7 +118,7 @@ describe("deleteIssueUseCase", () => {
     expect(repo.delete).toHaveBeenCalledWith(issue.id);
   });
 
-  it("正常系: Blob 削除が先に実行され、その後 Repository 削除が実行される", async () => {
+  it("正常系: DB 削除が先に実行され、その後 Blob 削除が実行される", async () => {
     const issue = makeIssue();
     const callOrder: string[] = [];
 
@@ -137,7 +137,21 @@ describe("deleteIssueUseCase", () => {
 
     await useCase({ issueId: issue.id });
 
-    expect(callOrder).toEqual(["blob.deleteByIssue", "repo.delete"]);
+    expect(callOrder).toEqual(["repo.delete", "blob.deleteByIssue"]);
+  });
+
+  it("正常系: Blob 削除失敗でも成功を返す（非致命的）", async () => {
+    const issue = makeIssue();
+    const repo = createMockRepo({ load: vi.fn().mockResolvedValue(issue) });
+    const blobStorage = createMockBlobStorage({
+      deleteByIssue: vi.fn().mockRejectedValue(new Error("S3 error")),
+    });
+    const useCase = deleteIssueUseCase(repo, blobStorage);
+
+    const result = await useCase({ issueId: issue.id });
+
+    expect(result.ok).toBe(true);
+    expect(repo.delete).toHaveBeenCalledWith(issue.id);
   });
 
   it("異常系: 存在しない Issue でエラーを返す", async () => {

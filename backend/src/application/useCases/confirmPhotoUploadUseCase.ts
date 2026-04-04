@@ -2,8 +2,10 @@
  * 写真アップロード確定ユースケース。
  *
  * @remarks
- * pending 状態の写真を confirmed に移動し、PhotoAdded イベントを記録する。
- * フロントエンドが MinIO へのアップロード完了後に呼び出す。
+ * PhotoAdded イベントを先に永続化し、その後 pending → confirmed に Blob を移動する。
+ * この順序により、DB保存失敗時にconfirmedに孤児ファイルが残ることを防ぐ。
+ * Blob移動失敗時はイベント永続化済みだが、pending ファイルは minio-cleanup の
+ * TTL(10分) で自動削除される。リトライ可能な設計。
  */
 
 import { addPhoto } from "../../domain/entities/issue.js";
@@ -16,7 +18,6 @@ import type {
 } from "../../domain/valueObjects/brandedId.js";
 import {
   createPhoto,
-  type Photo,
   type PhotoPhase,
   pendingBlobPath,
 } from "../../domain/valueObjects/photo.js";
@@ -64,9 +65,9 @@ export const confirmPhotoUploadUseCase =
       });
     }
 
-    // pending パスで Photo 値オブジェクトを作成
+    // pending パスで Photo 値オブジェクトを仮作成（confirmed パスはBlob移動後に確定）
     const pendingPath = pendingBlobPath(input.issueId, input.photoId, ext);
-    const pendingPhoto = createPhoto({
+    const photo = createPhoto({
       id: input.photoId,
       fileName: input.fileName,
       storagePath: pendingPath,
@@ -74,36 +75,27 @@ export const confirmPhotoUploadUseCase =
       uploadedAt: new Date(),
     });
 
-    // pending → confirmed に移動
-    let confirmedPhotos: readonly Photo[];
-    try {
-      confirmedPhotos = await blobStorage.confirmPending(input.issueId, [
-        pendingPhoto,
-      ]);
-    } catch (error) {
-      return err({
-        code: "CONFIRM_FAILED",
-        message: `Failed to confirm pending photo: ${error instanceof Error ? error.message : String(error)}`,
-      });
-    }
-    if (confirmedPhotos.length === 0) {
-      return err({
-        code: "CONFIRM_FAILED",
-        message: "Failed to confirm pending photo (file may have expired)",
-      });
-    }
-
-    // PhotoAdded イベントを生成
-    const eventResult = addPhoto(issue, confirmedPhotos[0], input.actorId);
+    // PhotoAdded イベントを生成（pending パスで仮登録）
+    const eventResult = addPhoto(issue, photo, input.actorId);
     if (!eventResult.ok) return eventResult;
 
-    // イベントを永続化
+    // イベントを先に永続化（データ整合性優先）
     try {
       await issueRepo.save(input.issueId, [eventResult.value], issue.version);
     } catch (error) {
       return err({
         code: "SAVE_FAILED",
         message: `Failed to save issue: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    }
+
+    // pending → confirmed に移動
+    try {
+      await blobStorage.confirmPending(input.issueId, [photo]);
+    } catch (error) {
+      return err({
+        code: "CONFIRM_FAILED",
+        message: `Failed to confirm pending photo: ${error instanceof Error ? error.message : String(error)}`,
       });
     }
 

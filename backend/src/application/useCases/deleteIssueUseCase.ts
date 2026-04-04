@@ -2,8 +2,9 @@
  * 指摘削除ユースケース。
  *
  * @remarks
- * 指摘の存在を確認し、関連する Blob を全削除した後、
- * イベントストア・読み取りモデル・スナップショットを hard delete する。
+ * DB を先に削除し、その後 Blob を削除する。この順序により、
+ * DB 削除失敗時に Blob だけ消えている不整合を防ぐ。
+ * Blob 削除失敗時は孤児ファイルが残るだけで、データ整合性には影響しない。
  *
  * イベントソーシングの設計上、`IssueDeleted` イベントは定義せず、
  * 集約ごと物理削除する方針を採用している。
@@ -41,14 +42,21 @@ export const deleteIssueUseCase =
       });
     }
 
+    // DB 削除を先に実行（データ整合性優先）
     try {
-      await blobStorage.deleteByIssue(input.issueId);
       await issueRepo.delete(input.issueId);
     } catch (error) {
       return err({
         code: "DELETE_FAILED",
         message: `Failed to delete issue: ${error instanceof Error ? error.message : String(error)}`,
       });
+    }
+
+    // Blob 削除（失敗しても孤児が残るだけで整合性には影響しない）
+    try {
+      await blobStorage.deleteByIssue(input.issueId);
+    } catch {
+      // Blob 削除失敗は非致命的。孤児ファイルはバックグラウンドで回収可能
     }
 
     return ok(undefined);
