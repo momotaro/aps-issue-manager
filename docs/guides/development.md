@@ -56,6 +56,7 @@ cp backend/.env.sample backend/.env
 
 - `frontend/.env` — 公開値のみ（`NEXT_PUBLIC_*`）
 - `backend/.env` — DB, MinIO, APS シークレット含む
+- `CORS_ALLOWED_ORIGINS` — CORS 許可オリジン（カンマ区切り、デフォルト: `http://localhost:3000`）
 
 ## 6. テスト実行
 

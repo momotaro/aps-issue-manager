@@ -9,6 +9,7 @@
 import { removePhoto } from "../../domain/entities/issue.js";
 import type { IssueRepository } from "../../domain/repositories/issueRepository.js";
 import type { BlobStorage } from "../../domain/services/blobStorage.js";
+import { ConcurrencyError } from "../../domain/services/errors.js";
 import type {
   IssueId,
   PhotoId,
@@ -62,6 +63,9 @@ export const removePhotoUseCase =
     try {
       await issueRepo.save(input.issueId, [eventResult.value], issue.version);
     } catch (error) {
+      if (error instanceof ConcurrencyError) {
+        return err({ code: "CONCURRENCY_CONFLICT", message: error.message });
+      }
       return err({
         code: "SAVE_FAILED",
         message: `Failed to save issue: ${error instanceof Error ? error.message : String(error)}`,

@@ -10,6 +10,7 @@
 import { createIssue } from "../../domain/entities/issue.js";
 import type { IssueCreatedEvent } from "../../domain/events/issueEvents.js";
 import type { IssueRepository } from "../../domain/repositories/issueRepository.js";
+import { ConcurrencyError } from "../../domain/services/errors.js";
 import type {
   IssueId,
   ProjectId,
@@ -86,6 +87,9 @@ export const createIssueUseCase =
       // version 0 = 新規集約（最初のイベントの version は 1）
       await issueRepo.save(event.issueId, [event], 0);
     } catch (error) {
+      if (error instanceof ConcurrencyError) {
+        return err({ code: "CONCURRENCY_CONFLICT", message: error.message });
+      }
       return err({
         code: "SAVE_FAILED",
         message: `Failed to save issue: ${error instanceof Error ? error.message : String(error)}`,
