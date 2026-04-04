@@ -56,3 +56,25 @@ cp backend/.env.sample backend/.env
 
 - `frontend/.env` — 公開値のみ（`NEXT_PUBLIC_*`）
 - `backend/.env` — DB, MinIO, APS シークレット含む
+
+## 6. テスト実行
+
+### テスト（単体 + 結合）
+
+`pnpm --filter backend test` は `src/**/*.test.ts` を対象に、単体テストと結合テストを一括で実行する。
+結合テストは PostgreSQL と MinIO に接続するため、事前に Docker を起動しておく必要がある。
+Docker 未起動の環境では、このコマンドで単体テストだけを実行することはできない。
+
+```bash
+# 1. Docker 起動（DB + MinIO）
+docker compose up -d
+
+# 2. テスト用 DB のセットアップ（初回のみ）
+docker compose exec db psql -U postgres -c "CREATE DATABASE issue_management_test"
+DATABASE_URL="postgres://postgres:postgres@localhost:5432/issue_management_test" npx drizzle-kit push
+
+# 3. テスト実行
+TEST_DATABASE_URL="postgres://postgres:postgres@localhost:5432/issue_management_test" pnpm --filter backend test
+```
+
+結合テストは `fileParallelism: false` で逐次実行される（共有 DB の競合防止）。
