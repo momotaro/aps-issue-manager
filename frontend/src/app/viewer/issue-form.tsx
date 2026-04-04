@@ -7,7 +7,11 @@ import { z } from "zod";
 import { CATEGORY_LABELS, type IssueCategory } from "./types";
 
 const issueFormSchema = z.object({
-  title: z.string().min(1, "タイトルは必須です"),
+  title: z
+    .string()
+    .trim()
+    .min(1, "タイトルは必須です")
+    .max(200, "タイトルは200文字以内で入力してください"),
   description: z.string(),
   category: z.enum([
     "quality_defect",
@@ -69,6 +73,7 @@ export function IssueFormPanel({
           <button
             type="button"
             onClick={onCancel}
+            aria-label="閉じる"
             className="text-zinc-400 hover:text-zinc-600"
           >
             <svg

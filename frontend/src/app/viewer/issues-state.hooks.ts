@@ -20,10 +20,10 @@ function toIssuePin(item: IssueListItem): IssuePin {
   };
 }
 
-export function useIssues() {
+export function useIssues(projectId: string) {
   return useQuery({
-    queryKey: ISSUES_QUERY_KEY,
-    queryFn: () => issueRepository.getIssues(),
+    queryKey: [...ISSUES_QUERY_KEY, projectId],
+    queryFn: () => issueRepository.getIssues({ projectId }),
     select: (data) => data.map(toIssuePin),
   });
 }

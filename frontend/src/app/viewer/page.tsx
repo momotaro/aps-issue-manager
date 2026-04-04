@@ -15,7 +15,11 @@ const TEMP_REPORTER_ID = "0000000000000000000001";
 
 export default function ViewerPage() {
   const { containerRef, viewer, isLoading, error } = useApsViewer();
-  const { data: issues = [], isLoading: issuesLoading } = useIssues();
+  const {
+    data: issues = [],
+    isLoading: issuesLoading,
+    error: issuesError,
+  } = useIssues(TEMP_PROJECT_ID);
   const createIssue = useCreateIssue();
   const {
     isPlacementMode,
@@ -28,6 +32,15 @@ export default function ViewerPage() {
     viewer,
     issues,
   );
+
+  const combinedLoading = isLoading || issuesLoading;
+  const combinedError =
+    error ||
+    (issuesError instanceof Error
+      ? issuesError.message
+      : issuesError
+        ? "指摘の取得に失敗しました"
+        : null);
 
   const isFormOpen = pendingPin !== null;
 
@@ -82,10 +95,10 @@ export default function ViewerPage() {
       <main className="flex-1 relative">
         <ApsViewer
           containerRef={containerRef}
-          isLoading={isLoading || issuesLoading}
-          error={error}
+          isLoading={combinedLoading}
+          error={combinedError}
         />
-        {!isLoading && !error && (
+        {!combinedLoading && !combinedError && (
           <>
             <IssuePinsOverlay
               positions={positions}

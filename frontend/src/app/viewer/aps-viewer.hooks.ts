@@ -6,6 +6,51 @@ import { apiClient } from "@/lib/api-client";
 
 const APS_URN = process.env.NEXT_PUBLIC_APS_URN ?? "";
 
+let viewerScriptPromise: Promise<void> | null = null;
+
+function loadViewerScript(): Promise<void> {
+  if (viewerScriptPromise) return viewerScriptPromise;
+
+  viewerScriptPromise = new Promise<void>((resolve, reject) => {
+    if (typeof Autodesk !== "undefined") {
+      resolve();
+      return;
+    }
+
+    if (!document.getElementById("aps-viewer-css")) {
+      const link = document.createElement("link");
+      link.id = "aps-viewer-css";
+      link.rel = "stylesheet";
+      link.href =
+        "https://developer.api.autodesk.com/modelderivative/v2/viewers/7.*/style.min.css";
+      document.head.appendChild(link);
+    }
+
+    const existingScript = document.getElementById("aps-viewer-js");
+    if (!existingScript) {
+      const script = document.createElement("script");
+      script.id = "aps-viewer-js";
+      script.src =
+        "https://developer.api.autodesk.com/modelderivative/v2/viewers/7.*/viewer3D.min.js";
+      script.onload = () => resolve();
+      script.onerror = () => {
+        viewerScriptPromise = null;
+        reject(new Error("APS Viewer の読み込みに失敗"));
+      };
+      document.head.appendChild(script);
+    } else {
+      const check = setInterval(() => {
+        if (typeof Autodesk !== "undefined") {
+          clearInterval(check);
+          resolve();
+        }
+      }, 50);
+    }
+  });
+
+  return viewerScriptPromise;
+}
+
 async function fetchAccessToken(): Promise<string> {
   const res = await apiClient.api.aps.token.$get();
   if (!res.ok) throw new Error("Failed to fetch APS token");
@@ -107,28 +152,6 @@ export function useApsViewer() {
     }
 
     if (!tokenReady || !accessToken) return;
-
-    const loadViewerScript = () => {
-      return new Promise<void>((resolve, reject) => {
-        if (typeof Autodesk !== "undefined") {
-          resolve();
-          return;
-        }
-
-        const link = document.createElement("link");
-        link.rel = "stylesheet";
-        link.href =
-          "https://developer.api.autodesk.com/modelderivative/v2/viewers/7.*/style.min.css";
-        document.head.appendChild(link);
-
-        const script = document.createElement("script");
-        script.src =
-          "https://developer.api.autodesk.com/modelderivative/v2/viewers/7.*/viewer3D.min.js";
-        script.onload = () => resolve();
-        script.onerror = () => reject(new Error("APS Viewer の読み込みに失敗"));
-        document.head.appendChild(script);
-      });
-    };
 
     loadViewerScript()
       .then(() => initViewer(accessToken))

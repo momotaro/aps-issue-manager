@@ -12,7 +12,7 @@ const apsRoutes = new Hono().get("/token", async (c) => {
     if (error instanceof Error && error.message === "APS is not configured") {
       return c.json({ error: "APS is not configured" }, 503);
     }
-    console.error("Failed to get APS token");
+    console.error("Failed to get APS token", error);
     return c.json({ error: "Failed to get APS token" }, 500);
   }
 });

@@ -42,6 +42,7 @@ export function IssuePinsOverlay({
             <button
               key={pin.id}
               type="button"
+              aria-label={`指摘: ${pin.title}`}
               className="absolute pointer-events-auto -translate-x-1/2 -translate-y-full group"
               style={{ left: x, top: y }}
               onClick={() => onPinClick(pin)}
@@ -114,6 +115,7 @@ function PinPopup({
           <button
             type="button"
             onClick={onClose}
+            aria-label="閉じる"
             className="ml-2 shrink-0 text-zinc-400 hover:text-zinc-600"
           >
             <svg

@@ -40,5 +40,17 @@ describe("apsRoutes", () => {
       const body = await res.json();
       expect(body).toEqual({ error: "Failed to get APS token" });
     });
+
+    it("503 で APS 未設定時にエラーを返す", async () => {
+      mockApsClient.getAccessToken.mockRejectedValue(
+        new Error("APS is not configured"),
+      );
+
+      const res = await app.request("/api/aps/token");
+
+      expect(res.status).toBe(503);
+      const body = await res.json();
+      expect(body).toEqual({ error: "APS is not configured" });
+    });
   });
 });
