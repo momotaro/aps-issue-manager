@@ -1,5 +1,9 @@
 import { db } from "./infrastructure/adapter/postgresql.js";
 import {
+  type ApsClient,
+  createApsClient,
+} from "./infrastructure/external/apsClient.js";
+import {
   type BlobStorageConfig,
   createBlobStorage,
 } from "./infrastructure/external/blobStorageImpl.js";
@@ -45,3 +49,16 @@ export const projectRepository = createProjectRepository(db);
 
 // --- Services ---
 export const blobStorage = createBlobStorage(blobConfig);
+
+// --- APS (optional) ---
+const apsClientId = process.env.APS_CLIENT_ID;
+const apsClientSecret = process.env.APS_CLIENT_SECRET;
+export const apsClient: ApsClient | null =
+  apsClientId && apsClientSecret
+    ? createApsClient(apsClientId, apsClientSecret)
+    : (() => {
+        console.warn(
+          "APS_CLIENT_ID / APS_CLIENT_SECRET not set — APS token endpoint disabled",
+        );
+        return null;
+      })();

@@ -2,6 +2,7 @@ import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { errorHandler } from "./presentation/middleware/errorHandler.js";
+import { apsRoutes } from "./presentation/routes/apsRoutes.js";
 import { issueRoutes } from "./presentation/routes/issueRoutes.js";
 import { projectRoutes } from "./presentation/routes/projectRoutes.js";
 import { userRoutes } from "./presentation/routes/userRoutes.js";
@@ -29,6 +30,7 @@ app.onError(errorHandler);
 app.get("/health", (c) => c.json({ status: "ok" }));
 
 const api = app
+  .route("/api/aps", apsRoutes)
   .route("/api/issues", issueRoutes)
   .route("/api/users", userRoutes)
   .route("/api/projects", projectRoutes);
