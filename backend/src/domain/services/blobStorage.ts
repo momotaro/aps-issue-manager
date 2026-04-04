@@ -11,7 +11,17 @@
  * 3. `pending/` の10分超過ファイルは minio-cleanup が自動削除
  */
 
-import type { Photo } from "../valueObjects/photo.js";
+import type { Photo, PhotoPhase } from "../valueObjects/photo.js";
+
+/**
+ * Presigned URL 発行の結果。
+ */
+export type GenerateUploadUrlResult = {
+  /** クライアントがファイルをアップロードするための Presigned URL。 */
+  readonly uploadUrl: string;
+  /** pending 状態のストレージパス。confirmPending 時に使用する。 */
+  readonly pendingPath: string;
+};
 
 /**
  * Blob ストレージのインターフェース。
@@ -38,6 +48,26 @@ export type BlobStorage = {
   ) => Promise<string>;
 
   /**
+   * Presigned URL を発行する。
+   *
+   * @remarks
+   * クライアントが MinIO に直接アップロードするための URL を生成する。
+   * アップロード先: `pending/{issueId}/{photoId}.{ext}`
+   *
+   * @param issueId - 対象の指摘 ID
+   * @param photoId - 写真の ID
+   * @param fileName - 元のファイル名（拡張子の抽出に使用）
+   * @param phase - 撮影フェーズ（before / after）
+   * @returns Presigned URL と pending パス
+   */
+  readonly generateUploadUrl: (
+    issueId: string,
+    photoId: string,
+    fileName: string,
+    phase: PhotoPhase,
+  ) => Promise<GenerateUploadUrlResult>;
+
+  /**
    * pending 状態のファイルを confirmed に移動する。
    *
    * @remarks
@@ -52,6 +82,16 @@ export type BlobStorage = {
     issueId: string,
     photos: readonly Photo[],
   ) => Promise<readonly Photo[]>;
+
+  /**
+   * 個別の写真ファイルを削除する。
+   *
+   * @remarks
+   * `confirmed/{issueId}/{phase}/{photoId}.{ext}` を削除する。
+   *
+   * @param storagePath - 削除対象のストレージパス
+   */
+  readonly deletePhoto: (storagePath: string) => Promise<void>;
 
   /**
    * 指摘に紐づく全ファイルを削除する。

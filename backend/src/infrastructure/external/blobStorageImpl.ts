@@ -6,9 +6,13 @@ import {
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { BlobStorage } from "../../domain/services/blobStorage.js";
-import type { Photo } from "../../domain/valueObjects/photo.js";
-import { confirmedBlobPath } from "../../domain/valueObjects/photo.js";
+import type { Photo, PhotoPhase } from "../../domain/valueObjects/photo.js";
+import {
+  confirmedBlobPath,
+  pendingBlobPath,
+} from "../../domain/valueObjects/photo.js";
 
 const ALLOWED_EXTENSIONS = new Set([
   "jpg",
@@ -100,6 +104,30 @@ export const createBlobStorage = (config: BlobStorageConfig): BlobStorage => {
       return key;
     },
 
+    generateUploadUrl: async (
+      issueId: string,
+      photoId: string,
+      fileName: string,
+      _phase: PhotoPhase,
+    ) => {
+      validateId(issueId, "issueId");
+      validateId(photoId, "photoId");
+
+      const ext = fileName.split(".").pop()?.toLowerCase() ?? "";
+      validateExt(ext);
+
+      const key = pendingBlobPath(issueId, photoId, ext);
+      const command = new PutObjectCommand({
+        Bucket: bucket,
+        Key: key,
+      });
+      const uploadUrl = await getSignedUrl(client, command, {
+        expiresIn: 600,
+      });
+
+      return { uploadUrl, pendingPath: key };
+    },
+
     confirmPending: async (
       issueId: string,
       photos: readonly Photo[],
@@ -131,6 +159,15 @@ export const createBlobStorage = (config: BlobStorageConfig): BlobStorage => {
         confirmed.push({ ...photo, storagePath: newPath });
       }
       return confirmed;
+    },
+
+    deletePhoto: async (storagePath: string): Promise<void> => {
+      await client.send(
+        new DeleteObjectCommand({
+          Bucket: bucket,
+          Key: storagePath,
+        }),
+      );
     },
 
     deleteByIssue: async (issueId: string): Promise<void> => {
