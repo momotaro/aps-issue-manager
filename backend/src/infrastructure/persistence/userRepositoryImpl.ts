@@ -22,7 +22,7 @@ const toDomain = (row: UserRow): User =>
 /** UserRepository を生成する高階関数。 */
 export const createUserRepository = (db: Db): UserRepository => ({
   findById: async (id: UserId): Promise<User | null> => {
-    const rows = await db.select().from(users).where(eq(users.id, id));
+    const rows = await db.select().from(users).where(eq(users.id, id)).limit(1);
     return rows.length > 0 ? toDomain(rows[0]) : null;
   },
 
@@ -54,7 +54,11 @@ export const createUserRepository = (db: Db): UserRepository => ({
   },
 
   findByEmail: async (email: string): Promise<User | null> => {
-    const rows = await db.select().from(users).where(eq(users.email, email));
+    const rows = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
     return rows.length > 0 ? toDomain(rows[0]) : null;
   },
 });

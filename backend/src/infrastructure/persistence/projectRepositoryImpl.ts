@@ -22,7 +22,11 @@ const toDomain = (row: ProjectRow): Project =>
 /** ProjectRepository を生成する高階関数。 */
 export const createProjectRepository = (db: Db): ProjectRepository => ({
   findById: async (id: ProjectId): Promise<Project | null> => {
-    const rows = await db.select().from(projects).where(eq(projects.id, id));
+    const rows = await db
+      .select()
+      .from(projects)
+      .where(eq(projects.id, id))
+      .limit(1);
     return rows.length > 0 ? toDomain(rows[0]) : null;
   },
 

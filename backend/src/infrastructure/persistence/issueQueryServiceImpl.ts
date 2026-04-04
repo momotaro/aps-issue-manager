@@ -122,10 +122,8 @@ const toListItem = (
   title: row.title,
   status: row.status as IssueStatus,
   category: row.category as IssueCategory,
-  reporterName: nameMap.get(row.reporterId) ?? "Unknown",
-  assigneeName: row.assigneeId
-    ? (nameMap.get(row.assigneeId) ?? "Unknown")
-    : null,
+  reporterName: nameMap.get(row.reporterId) ?? null,
+  assigneeName: row.assigneeId ? (nameMap.get(row.assigneeId) ?? null) : null,
   position: row.positionData as unknown as Position,
   photoCount: row.photoCount,
   createdAt: row.createdAt,
