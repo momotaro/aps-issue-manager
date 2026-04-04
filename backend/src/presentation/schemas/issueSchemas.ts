@@ -13,7 +13,7 @@ const safeFileNameSchema = z
 
 export const createIssueBodySchema = z.object({
   projectId: base62IdSchema,
-  title: z.string().min(1).max(200),
+  title: z.string().trim().min(1).max(200),
   description: z.string().max(10000),
   category: z.enum(ISSUE_CATEGORIES),
   position: positionSchema,
@@ -29,7 +29,7 @@ export const issueFiltersQuerySchema = z.object({
 });
 
 export const updateTitleBodySchema = z.object({
-  title: z.string().min(1).max(200),
+  title: z.string().trim().min(1).max(200),
   actorId: base62IdSchema,
 });
 

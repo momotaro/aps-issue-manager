@@ -19,8 +19,8 @@ app.use(
   "*",
   cors({
     origin: (origin) => {
-      if (!origin) return "";
-      return allowedOrigins.includes(origin) ? origin : "";
+      if (!origin) return undefined;
+      return allowedOrigins.includes(origin) ? origin : undefined;
     },
   }),
 );

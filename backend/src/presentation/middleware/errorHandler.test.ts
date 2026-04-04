@@ -7,19 +7,16 @@ describe("mapResultErrorToStatus", () => {
     expect(mapResultErrorToStatus("PHOTO_NOT_FOUND")).toBe(404);
   });
 
-  it("INVALID_TRANSITION は 409 を返す", () => {
+  it("競合系コードは 409 を返す", () => {
     expect(mapResultErrorToStatus("INVALID_TRANSITION")).toBe(409);
-  });
-
-  it("CONCURRENCY_CONFLICT は 409 を返す", () => {
     expect(mapResultErrorToStatus("CONCURRENCY_CONFLICT")).toBe(409);
+    expect(mapResultErrorToStatus("DUPLICATE_PHOTO")).toBe(409);
   });
 
-  it("NO_CHANGES は 400 を返す", () => {
+  it("クライアントエラー系コードは 400 を返す", () => {
     expect(mapResultErrorToStatus("NO_CHANGES")).toBe(400);
-  });
-
-  it("INVALID_FILE_EXTENSION は 400 を返す", () => {
+    expect(mapResultErrorToStatus("NO_CHANGE")).toBe(400);
+    expect(mapResultErrorToStatus("EMPTY_TITLE")).toBe(400);
     expect(mapResultErrorToStatus("INVALID_FILE_EXTENSION")).toBe(400);
   });
 

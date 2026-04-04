@@ -32,10 +32,22 @@ export const errorHandler: ErrorHandler = (error, c) => {
   return c.json(errorJson("INTERNAL_ERROR", "Internal server error"), 500);
 };
 
+const CLIENT_ERROR_400 = new Set([
+  "NO_CHANGE",
+  "NO_CHANGES",
+  "EMPTY_TITLE",
+  "INVALID_FILE_EXTENSION",
+]);
+
+const CONFLICT_409 = new Set([
+  "INVALID_TRANSITION",
+  "CONCURRENCY_CONFLICT",
+  "DUPLICATE_PHOTO",
+]);
+
 export const mapResultErrorToStatus = (code: string): ContentfulStatusCode => {
   if (code.endsWith("_NOT_FOUND")) return 404;
-  if (code === "INVALID_TRANSITION" || code === "CONCURRENCY_CONFLICT")
-    return 409;
-  if (code === "NO_CHANGES" || code === "INVALID_FILE_EXTENSION") return 400;
+  if (CONFLICT_409.has(code)) return 409;
+  if (CLIENT_ERROR_400.has(code)) return 400;
   return 500;
 };
