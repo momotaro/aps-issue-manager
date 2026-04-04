@@ -75,4 +75,14 @@ export type IssueRepository = {
    * @returns スナップショット。存在しない場合は `null`
    */
   readonly getSnapshot: (id: IssueId) => Promise<IssueSnapshot | null>;
+
+  /**
+   * Issue 集約を物理削除する。
+   *
+   * @remarks
+   * イベントストア・読み取りモデル・スナップショットを全て削除する。
+   *
+   * @param id - 削除対象の Issue ID
+   */
+  readonly delete: (id: IssueId) => Promise<void>;
 };

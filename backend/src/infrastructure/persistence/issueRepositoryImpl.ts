@@ -13,7 +13,7 @@ import type { IssueId, UserId } from "../../domain/valueObjects/brandedId.js";
 import { parseId } from "../../domain/valueObjects/brandedId.js";
 import type { createEventProjector } from "./eventProjectorImpl.js";
 import type { createEventStore } from "./eventStoreImpl.js";
-import { issueSnapshots } from "./schema.js";
+import { issueEvents, issueSnapshots, issuesRead } from "./schema.js";
 import type { Db } from "./types.js";
 
 type EventStoreFactory = ReturnType<typeof createEventStore>;
@@ -77,6 +77,14 @@ export const createIssueRepository = (
 
   getSnapshot: async (id: IssueId): Promise<IssueSnapshot | null> => {
     return loadSnapshot(db, id);
+  },
+
+  delete: async (id: IssueId): Promise<void> => {
+    await db.transaction(async (tx) => {
+      await tx.delete(issueSnapshots).where(eq(issueSnapshots.issueId, id));
+      await tx.delete(issuesRead).where(eq(issuesRead.id, id));
+      await tx.delete(issueEvents).where(eq(issueEvents.issueId, id));
+    });
   },
 });
 
