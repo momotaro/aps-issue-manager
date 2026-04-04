@@ -97,6 +97,28 @@ describe("eventStoreImpl（結合テスト）", () => {
     const events = await eventStore.getEvents(generateId<IssueId>());
     expect(events).toHaveLength(0);
   });
+
+  it("並行 append で片方が ConcurrencyError になる", async () => {
+    const created = makeIssueCreatedEvent();
+    const issueId = created.issueId;
+    await eventStore.append(issueId, [created], 0);
+
+    const update1 = makeTitleUpdatedEvent(issueId, 2, "並行更新A");
+    const update2 = makeTitleUpdatedEvent(issueId, 2, "並行更新B");
+
+    const results = await Promise.allSettled([
+      eventStore.append(issueId, [update1], 1),
+      eventStore.append(issueId, [update2], 1),
+    ]);
+
+    const fulfilled = results.filter((r) => r.status === "fulfilled");
+    const rejected = results.filter((r) => r.status === "rejected");
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect((rejected[0] as PromiseRejectedResult).reason).toBeInstanceOf(
+      ConcurrencyError,
+    );
+  });
 });
 
 describe("isVersionConflict", () => {

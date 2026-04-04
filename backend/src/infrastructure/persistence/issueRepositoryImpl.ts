@@ -55,20 +55,22 @@ export const createIssueRepository = (
   },
 
   saveSnapshot: async (snapshot: IssueSnapshot): Promise<void> => {
+    const now = new Date();
+    const stateJson = snapshotToJson(snapshot.state);
     await db
       .insert(issueSnapshots)
       .values({
         issueId: snapshot.state.id,
-        state: snapshotToJson(snapshot.state),
+        state: stateJson,
         version: snapshot.version,
-        createdAt: new Date(),
+        createdAt: now,
       })
       .onConflictDoUpdate({
         target: issueSnapshots.issueId,
         set: {
-          state: snapshotToJson(snapshot.state),
+          state: stateJson,
           version: snapshot.version,
-          createdAt: new Date(),
+          createdAt: now,
         },
       });
   },

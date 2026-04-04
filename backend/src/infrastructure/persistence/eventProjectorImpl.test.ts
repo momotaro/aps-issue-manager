@@ -156,6 +156,25 @@ describe("eventProjectorImpl（結合テスト）", () => {
     expect(photos[0].fileName).toBe("test.jpg");
   });
 
+  it("複数イベントを一括で project できる", async () => {
+    const created = makeIssueCreatedEvent();
+    const titleUpdated: IssueDomainEvent = {
+      ...createEventMeta(created.issueId, testActorId, 2),
+      type: "IssueTitleUpdated",
+      payload: { title: "一括投影タイトル" },
+    };
+
+    await projector.project([created, titleUpdated]);
+
+    const rows = await db
+      .select()
+      .from(issuesRead)
+      .where(eq(issuesRead.id, created.issueId));
+    expect(rows).toHaveLength(1);
+    expect(rows[0].title).toBe("一括投影タイトル");
+    expect(rows[0].version).toBe(2);
+  });
+
   it("PhotoRemoved で photoCount がデクリメントされる", async () => {
     const created = await projectCreated();
     const photoId = generateId<PhotoId>();

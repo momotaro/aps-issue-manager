@@ -66,23 +66,23 @@ const eventToUpdates = (
       return { category: event.payload.category };
     case "IssueAssigneeChanged":
       return { assigneeId: event.payload.assigneeId };
-    case "PhotoAdded":
+    case "PhotoAdded": {
+      const appended = sql`${issuesRead.photos} || ${JSON.stringify([event.payload.photo])}::jsonb`;
       return {
-        photos: sql`${issuesRead.photos} || ${JSON.stringify([event.payload.photo])}::jsonb`,
-        photoCount: sql`${issuesRead.photoCount} + 1`,
+        photos: appended,
+        photoCount: sql`jsonb_array_length(${appended})`,
       };
-    case "PhotoRemoved":
-      return {
-        photos: sql`COALESCE((
+    }
+    case "PhotoRemoved": {
+      const filtered = sql`COALESCE((
           SELECT jsonb_agg(elem)
           FROM jsonb_array_elements(${issuesRead.photos}) AS elem
           WHERE elem->>'id' != ${event.payload.photoId}
-        ), '[]'::jsonb)`,
-        photoCount: sql`jsonb_array_length(COALESCE((
-          SELECT jsonb_agg(elem)
-          FROM jsonb_array_elements(${issuesRead.photos}) AS elem
-          WHERE elem->>'id' != ${event.payload.photoId}
-        ), '[]'::jsonb))`,
+        ), '[]'::jsonb)`;
+      return {
+        photos: filtered,
+        photoCount: sql`jsonb_array_length(${filtered})`,
       };
+    }
   }
 };

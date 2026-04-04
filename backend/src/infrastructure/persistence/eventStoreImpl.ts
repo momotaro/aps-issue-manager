@@ -117,15 +117,14 @@ export const createEventStore =
         } catch (error: unknown) {
           // UNIQUE(issue_id, version) 違反のみ ConcurrencyError に変換
           if (isVersionConflict(error)) {
-            // 正確な actualVersion を再取得
-            const rows = await executor
-              .select({ version: issueEvents.version })
-              .from(issueEvents)
-              .where(eq(issueEvents.issueId, aggregateId))
-              .orderBy(desc(issueEvents.version))
-              .limit(1);
-            const actual = rows.length > 0 ? rows[0].version : 0;
-            throw new ConcurrencyError(aggregateId, expectedVersion, actual);
+            // トランザクション abort 後の再 SELECT は失敗する可能性があるため、
+            // expectedVersion + 挿入済みイベント数から推定する
+            const lastEventVersion = events[events.length - 1].version;
+            throw new ConcurrencyError(
+              aggregateId,
+              expectedVersion,
+              lastEventVersion,
+            );
           }
           throw error;
         }
