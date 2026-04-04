@@ -16,6 +16,7 @@ import type {
 } from "../../domain/valueObjects/brandedId.js";
 import {
   createPhoto,
+  type Photo,
   type PhotoPhase,
   pendingBlobPath,
 } from "../../domain/valueObjects/photo.js";
@@ -54,8 +55,14 @@ export const confirmPhotoUploadUseCase =
       });
     }
 
-    // ファイル拡張子を取得
+    // ファイル拡張子を検証
     const ext = input.fileName.split(".").pop()?.toLowerCase() ?? "";
+    if (!ext) {
+      return err({
+        code: "INVALID_FILE_EXTENSION",
+        message: "File name must have an extension",
+      });
+    }
 
     // pending パスで Photo 値オブジェクトを作成
     const pendingPath = pendingBlobPath(input.issueId, input.photoId, ext);
@@ -68,9 +75,17 @@ export const confirmPhotoUploadUseCase =
     });
 
     // pending → confirmed に移動
-    const confirmedPhotos = await blobStorage.confirmPending(input.issueId, [
-      pendingPhoto,
-    ]);
+    let confirmedPhotos: readonly Photo[];
+    try {
+      confirmedPhotos = await blobStorage.confirmPending(input.issueId, [
+        pendingPhoto,
+      ]);
+    } catch (error) {
+      return err({
+        code: "CONFIRM_FAILED",
+        message: `Failed to confirm pending photo: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    }
     if (confirmedPhotos.length === 0) {
       return err({
         code: "CONFIRM_FAILED",

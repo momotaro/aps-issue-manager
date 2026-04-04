@@ -56,12 +56,26 @@ export const generatePhotoUploadUrlUseCase =
 
     const photoId = generateId<PhotoId>();
 
-    const { uploadUrl } = await blobStorage.generateUploadUrl(
-      input.issueId,
-      photoId,
-      input.fileName,
-      input.phase,
-    );
+    try {
+      const { uploadUrl } = await blobStorage.generateUploadUrl(
+        input.issueId,
+        photoId,
+        input.fileName,
+        input.phase,
+      );
 
-    return { ok: true, value: { photoId, uploadUrl } };
+      return { ok: true, value: { photoId, uploadUrl } };
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Failed to generate upload URL";
+
+      return err({
+        code: message.toLowerCase().includes("extension")
+          ? "INVALID_FILE_EXTENSION"
+          : "UPLOAD_URL_FAILED",
+        message,
+      });
+    }
   };

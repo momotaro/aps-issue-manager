@@ -33,7 +33,7 @@ export const getIssueDetailUseCase =
     if (detail === null) {
       return err({
         code: "ISSUE_NOT_FOUND",
-        message: `指摘が見つかりません: ${id}`,
+        message: `Issue not found: ${id}`,
       });
     }
 

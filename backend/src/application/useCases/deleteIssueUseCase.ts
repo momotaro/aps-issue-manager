@@ -11,7 +11,7 @@
 
 import type { IssueRepository } from "../../domain/repositories/issueRepository.js";
 import type { BlobStorage } from "../../domain/services/blobStorage.js";
-import type { IssueId, UserId } from "../../domain/valueObjects/brandedId.js";
+import type { IssueId } from "../../domain/valueObjects/brandedId.js";
 import type {
   DomainErrorDetail,
   Result,
@@ -21,7 +21,6 @@ import { err, ok } from "../../domain/valueObjects/result.js";
 /** ユースケースの入力型。 */
 export type DeleteIssueInput = {
   readonly issueId: IssueId;
-  readonly actorId: UserId;
 };
 
 /**

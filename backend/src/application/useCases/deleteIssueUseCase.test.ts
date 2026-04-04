@@ -98,7 +98,7 @@ describe("deleteIssueUseCase", () => {
     const blobStorage = createMockBlobStorage();
     const useCase = deleteIssueUseCase(repo, blobStorage);
 
-    const result = await useCase({ issueId: issue.id, actorId });
+    const result = await useCase({ issueId: issue.id });
 
     expect(result.ok).toBe(true);
     expect(blobStorage.deleteByIssue).toHaveBeenCalledWith(issue.id);
@@ -111,7 +111,7 @@ describe("deleteIssueUseCase", () => {
     const blobStorage = createMockBlobStorage();
     const useCase = deleteIssueUseCase(repo, blobStorage);
 
-    const result = await useCase({ issueId: issue.id, actorId });
+    const result = await useCase({ issueId: issue.id });
 
     expect(result.ok).toBe(true);
     expect(blobStorage.deleteByIssue).toHaveBeenCalledWith(issue.id);
@@ -135,7 +135,7 @@ describe("deleteIssueUseCase", () => {
     });
     const useCase = deleteIssueUseCase(repo, blobStorage);
 
-    await useCase({ issueId: issue.id, actorId });
+    await useCase({ issueId: issue.id });
 
     expect(callOrder).toEqual(["blob.deleteByIssue", "repo.delete"]);
   });
@@ -146,7 +146,7 @@ describe("deleteIssueUseCase", () => {
     const useCase = deleteIssueUseCase(repo, blobStorage);
     const issueId = parseId<IssueId>("01ISSUE000000000000000ISSUE");
 
-    const result = await useCase({ issueId, actorId });
+    const result = await useCase({ issueId });
 
     expect(result.ok).toBe(false);
     if (result.ok) return;

@@ -56,7 +56,9 @@ describe("getIssuesUseCase", () => {
 
     const result = await getIssuesUseCase(queryService)();
 
-    expect(result).toEqual(items);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value).toEqual(items);
     expect(queryService.findAll).toHaveBeenCalledWith(undefined);
   });
 
@@ -72,7 +74,9 @@ describe("getIssuesUseCase", () => {
 
     const result = await getIssuesUseCase(queryService)(filters);
 
-    expect(result).toEqual(items);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value).toEqual(items);
     expect(queryService.findAll).toHaveBeenCalledWith(filters);
   });
 
@@ -85,6 +89,8 @@ describe("getIssuesUseCase", () => {
       assigneeId: parseId<UserId>("01NONEXISTENT00000000NOONE"),
     });
 
-    expect(result).toEqual([]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value).toEqual([]);
   });
 });

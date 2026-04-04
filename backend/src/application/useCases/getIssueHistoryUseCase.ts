@@ -10,6 +10,11 @@
 import type { IssueDomainEvent } from "../../domain/events/issueEvents.js";
 import type { IssueQueryService } from "../../domain/repositories/issueQueryService.js";
 import type { IssueId } from "../../domain/valueObjects/brandedId.js";
+import type {
+  DomainErrorDetail,
+  Result,
+} from "../../domain/valueObjects/result.js";
+import { err } from "../../domain/valueObjects/result.js";
 
 /**
  * 指摘変更履歴取得ユースケースを生成する。
@@ -19,6 +24,16 @@ import type { IssueId } from "../../domain/valueObjects/brandedId.js";
  */
 export const getIssueHistoryUseCase =
   (queryService: IssueQueryService) =>
-  async (id: IssueId): Promise<readonly IssueDomainEvent[]> => {
-    return queryService.getEventHistory(id);
+  async (
+    id: IssueId,
+  ): Promise<Result<readonly IssueDomainEvent[], DomainErrorDetail>> => {
+    try {
+      const events = await queryService.getEventHistory(id);
+      return { ok: true, value: events };
+    } catch (error) {
+      return err({
+        code: "QUERY_FAILED",
+        message: `Failed to fetch issue history: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    }
   };

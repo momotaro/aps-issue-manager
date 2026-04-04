@@ -69,7 +69,14 @@ export const removePhotoUseCase =
     }
 
     // Blob を削除
-    await blobStorage.deletePhoto(photo.storagePath);
+    try {
+      await blobStorage.deletePhoto(photo.storagePath);
+    } catch (error) {
+      return err({
+        code: "BLOB_DELETE_FAILED",
+        message: `Failed to delete blob: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    }
 
     return { ok: true, value: undefined };
   };

@@ -11,6 +11,11 @@ import type {
   IssueListItem,
   IssueQueryService,
 } from "../../domain/repositories/issueQueryService.js";
+import type {
+  DomainErrorDetail,
+  Result,
+} from "../../domain/valueObjects/result.js";
+import { err } from "../../domain/valueObjects/result.js";
 
 /**
  * 指摘一覧取得ユースケースを生成する。
@@ -20,6 +25,16 @@ import type {
  */
 export const getIssuesUseCase =
   (queryService: IssueQueryService) =>
-  async (filters?: IssueFilters): Promise<readonly IssueListItem[]> => {
-    return queryService.findAll(filters);
+  async (
+    filters?: IssueFilters,
+  ): Promise<Result<readonly IssueListItem[], DomainErrorDetail>> => {
+    try {
+      const items = await queryService.findAll(filters);
+      return { ok: true, value: items };
+    } catch (error) {
+      return err({
+        code: "QUERY_FAILED",
+        message: `Failed to fetch issues: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    }
   };

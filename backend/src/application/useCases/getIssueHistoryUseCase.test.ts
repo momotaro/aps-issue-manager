@@ -61,8 +61,10 @@ describe("getIssueHistoryUseCase", () => {
 
     const result = await getIssueHistoryUseCase(queryService)(issueId);
 
-    expect(result).toEqual(events);
-    expect(result).toHaveLength(1);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value).toEqual(events);
+    expect(result.value).toHaveLength(1);
     expect(queryService.getEventHistory).toHaveBeenCalledWith(issueId);
   });
 
@@ -73,6 +75,8 @@ describe("getIssueHistoryUseCase", () => {
 
     const result = await getIssueHistoryUseCase(queryService)(issueId);
 
-    expect(result).toEqual([]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value).toEqual([]);
   });
 });
