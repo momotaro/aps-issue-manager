@@ -25,13 +25,21 @@ export const userRoutes = new Hono()
   .get("/:id", async (c) => {
     const uuid = base62ToUuid(c.req.param("id"));
     const user = await userRepository.findById(parseId<UserId>(uuid));
-    if (!user) return c.json({ error: "User not found" }, 404);
+    if (!user)
+      return c.json(
+        { error: { code: "NOT_FOUND", message: "User not found" } },
+        404,
+      );
     return c.json(serializeUser(user));
   })
   .put("/:id", zValidator("json", updateUserBodySchema), async (c) => {
     const uuid = base62ToUuid(c.req.param("id"));
     const user = await userRepository.findById(parseId<UserId>(uuid));
-    if (!user) return c.json({ error: "User not found" }, 404);
+    if (!user)
+      return c.json(
+        { error: { code: "NOT_FOUND", message: "User not found" } },
+        404,
+      );
     const body = c.req.valid("json");
     const updated = updateUser(user, body);
     await userRepository.save(updated);

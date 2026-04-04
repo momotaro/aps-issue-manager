@@ -11,6 +11,10 @@ describe("mapResultErrorToStatus", () => {
     expect(mapResultErrorToStatus("INVALID_TRANSITION")).toBe(409);
   });
 
+  it("CONCURRENCY_CONFLICT は 409 を返す", () => {
+    expect(mapResultErrorToStatus("CONCURRENCY_CONFLICT")).toBe(409);
+  });
+
   it("NO_CHANGES は 400 を返す", () => {
     expect(mapResultErrorToStatus("NO_CHANGES")).toBe(400);
   });

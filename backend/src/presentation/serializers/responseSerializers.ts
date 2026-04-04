@@ -50,11 +50,38 @@ export const serializeIssueDetail = (detail: IssueDetail) => ({
   })),
 });
 
+const isIdKey = (key: string) => key === "id" || key.endsWith("Id");
+
+const serializePayloadValue = (
+  key: string | undefined,
+  value: unknown,
+): unknown => {
+  if (value instanceof Date) return value.toISOString();
+
+  if (Array.isArray(value))
+    return value.map((item) => serializePayloadValue(undefined, item));
+
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).flatMap(([k, v]) => {
+        if (k === "storagePath") return [];
+        return [[k, serializePayloadValue(k, v)]];
+      }),
+    );
+  }
+
+  if (key && isIdKey(key) && typeof value === "string") {
+    return uuidToBase62(value);
+  }
+
+  return value;
+};
+
 export const serializeIssueEvent = (event: IssueDomainEvent) => ({
   id: uuidToBase62(event.id),
   issueId: uuidToBase62(event.issueId),
   type: event.type,
-  payload: event.payload,
+  payload: serializePayloadValue(undefined, event.payload),
   actorId: uuidToBase62(event.actorId),
   version: event.version,
   occurredAt: event.occurredAt.toISOString(),

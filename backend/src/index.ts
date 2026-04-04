@@ -8,7 +8,22 @@ import { userRoutes } from "./presentation/routes/userRoutes.js";
 
 const app = new Hono();
 
-app.use("*", cors({ origin: "http://localhost:3000" }));
+const allowedOrigins = (
+  process.env.CORS_ALLOWED_ORIGINS ?? "http://localhost:3000"
+)
+  .split(",")
+  .map((o) => o.trim())
+  .filter((o) => o.length > 0);
+
+app.use(
+  "*",
+  cors({
+    origin: (origin) => {
+      if (!origin) return "";
+      return allowedOrigins.includes(origin) ? origin : "";
+    },
+  }),
+);
 app.onError(errorHandler);
 
 app.get("/health", (c) => c.json({ status: "ok" }));

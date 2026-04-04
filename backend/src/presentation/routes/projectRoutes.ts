@@ -25,13 +25,21 @@ export const projectRoutes = new Hono()
   .get("/:id", async (c) => {
     const uuid = base62ToUuid(c.req.param("id"));
     const project = await projectRepository.findById(parseId<ProjectId>(uuid));
-    if (!project) return c.json({ error: "Project not found" }, 404);
+    if (!project)
+      return c.json(
+        { error: { code: "NOT_FOUND", message: "Project not found" } },
+        404,
+      );
     return c.json(serializeProject(project));
   })
   .put("/:id", zValidator("json", updateProjectBodySchema), async (c) => {
     const uuid = base62ToUuid(c.req.param("id"));
     const project = await projectRepository.findById(parseId<ProjectId>(uuid));
-    if (!project) return c.json({ error: "Project not found" }, 404);
+    if (!project)
+      return c.json(
+        { error: { code: "NOT_FOUND", message: "Project not found" } },
+        404,
+      );
     const body = c.req.valid("json");
     const updated = updateProject(project, body);
     await projectRepository.save(updated);
