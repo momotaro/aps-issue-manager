@@ -20,6 +20,17 @@ const requireEnv = (name: string): string => {
   return value;
 };
 
+const requirePort = (name: string): number => {
+  const raw = requireEnv(name);
+  const port = Number.parseInt(raw, 10);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error(
+      `Invalid port in environment variable ${name}: "${raw}" (expected 1-65535)`,
+    );
+  }
+  return port;
+};
+
 // --- Factory ---
 const eventStoreFactory = createEventStore(db);
 const eventProjectorFactory = createEventProjector(db);
@@ -37,7 +48,7 @@ export const projectRepository = createProjectRepository(db);
 // --- Services ---
 const minioClient = createMinioClient({
   endPoint: requireEnv("MINIO_ENDPOINT"),
-  port: Number(requireEnv("MINIO_PORT")),
+  port: requirePort("MINIO_PORT"),
   accessKey: requireEnv("MINIO_ACCESS_KEY"),
   secretKey: requireEnv("MINIO_SECRET_KEY"),
 });

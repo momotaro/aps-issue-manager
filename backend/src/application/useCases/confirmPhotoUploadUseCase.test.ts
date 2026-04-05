@@ -96,7 +96,7 @@ describe("confirmPhotoUploadUseCase", () => {
 
     expect(result.ok).toBe(true);
 
-    // confirmPending が呼ばれた
+    // confirmPending に pending パスの Photo が渡される
     expect(blobStorage.confirmPending).toHaveBeenCalledWith(
       issueId,
       expect.arrayContaining([
@@ -104,11 +104,12 @@ describe("confirmPhotoUploadUseCase", () => {
           id: photoId,
           fileName: "crack.jpg",
           phase: "before",
+          storagePath: `pending/${issueId}/${photoId}.jpg`,
         }),
       ]),
     );
 
-    // save が PhotoAdded イベントで呼ばれた
+    // PhotoAdded イベントには confirmed パスが記録される
     expect(issueRepo.save).toHaveBeenCalledWith(
       issueId,
       [
@@ -118,6 +119,7 @@ describe("confirmPhotoUploadUseCase", () => {
             photo: expect.objectContaining({
               id: photoId,
               phase: "before",
+              storagePath: `confirmed/${issueId}/before/${photoId}.jpg`,
             }),
           }),
         }),

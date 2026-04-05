@@ -65,17 +65,36 @@ const validateConfirmedPath = (storagePath: string): void => {
   }
 };
 
-/** listObjects のストリームを Promise<string[]> に変換する。 */
-const collectObjectNames = (
+const DELETE_BATCH_SIZE = 1000;
+
+/** listObjects のストリームからチャンク単位で removeObjects を実行する。 */
+const deleteObjectsByStream = (
+  client: Minio.Client,
+  bucket: string,
   stream: ReturnType<Minio.Client["listObjects"]>,
-): Promise<string[]> =>
+): Promise<void> =>
   new Promise((resolve, reject) => {
-    const names: string[] = [];
+    let batch: string[] = [];
+    let pending: Promise<unknown> = Promise.resolve();
+
+    const flush = (names: string[]) => {
+      pending = pending
+        .then(() => client.removeObjects(bucket, names))
+        .catch(reject);
+    };
+
     stream.on("data", (obj) => {
-      if (obj.name) names.push(obj.name);
+      if (obj.name) batch.push(obj.name);
+      if (batch.length >= DELETE_BATCH_SIZE) {
+        flush(batch);
+        batch = [];
+      }
     });
     stream.on("error", reject);
-    stream.on("end", () => resolve(names));
+    stream.on("end", () => {
+      if (batch.length > 0) flush(batch);
+      pending.then(() => resolve()).catch(reject);
+    });
   });
 
 /** BlobStorage を生成する高階関数。 */
@@ -139,11 +158,7 @@ export const createBlobStorage = (
 
     const prefix = `confirmed/${issueId}/`;
     const stream = client.listObjects(bucket, prefix, true);
-    const names = await collectObjectNames(stream);
-
-    if (names.length > 0) {
-      await client.removeObjects(bucket, names);
-    }
+    await deleteObjectsByStream(client, bucket, stream);
   },
 
   deletePhoto: async (storagePath: string): Promise<void> => {
