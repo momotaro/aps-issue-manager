@@ -1,27 +1,11 @@
 "use client";
 
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect } from "react";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
+import type { PhotoItem, PhotoPhase } from "@/repositories/issue-repository";
+import type { IssueFormValues } from "./issue-form.hooks";
+import { useIssueForm } from "./issue-form.hooks";
+import type { UploadingPhoto } from "./photo-upload.hooks";
+import { PhotoUploader } from "./photo-uploader";
 import { CATEGORY_LABELS, type IssueCategory } from "./types";
-
-const issueFormSchema = z.object({
-  title: z
-    .string()
-    .trim()
-    .min(1, "タイトルは必須です")
-    .max(200, "タイトルは200文字以内で入力してください"),
-  description: z.string(),
-  category: z.enum([
-    "quality_defect",
-    "safety_hazard",
-    "construction_defect",
-    "design_change",
-  ]),
-});
-
-export type IssueFormValues = z.infer<typeof issueFormSchema>;
 
 interface IssueFormPanelProps {
   isOpen: boolean;
@@ -29,7 +13,17 @@ interface IssueFormPanelProps {
   onSubmit: (data: IssueFormValues) => void;
   onCancel: () => void;
   isSubmitting?: boolean;
+  // Photo props (optional — only shown when issueId is available)
+  issueId?: string | null;
+  photos?: PhotoItem[];
+  uploading?: UploadingPhoto[];
+  onFilesSelected?: (files: File[], phase: PhotoPhase) => void;
+  onDeletePhoto?: (photoId: string) => void;
+  onPhotoClick?: (index: number) => void;
+  isDeletePending?: boolean;
 }
+
+export type { IssueFormValues };
 
 export function IssueFormPanel({
   isOpen,
@@ -37,29 +31,26 @@ export function IssueFormPanel({
   onSubmit,
   onCancel,
   isSubmitting = false,
+  issueId,
+  photos = [],
+  uploading = [],
+  onFilesSelected,
+  onDeletePhoto,
+  onPhotoClick,
+  isDeletePending = false,
 }: IssueFormPanelProps) {
+  const { form, photoPhase, setPhotoPhase } = useIssueForm(
+    isOpen,
+    defaultTitle,
+  );
   const {
     register,
     handleSubmit,
-    reset,
     formState: { errors },
-  } = useForm<IssueFormValues>({
-    resolver: zodResolver(issueFormSchema),
-    defaultValues: {
-      title: "",
-      description: "",
-      category: "quality_defect",
-    },
-  });
+  } = form;
 
-  useEffect(() => {
-    if (isOpen)
-      reset({
-        title: defaultTitle,
-        description: "",
-        category: "quality_defect",
-      });
-  }, [isOpen, defaultTitle, reset]);
+  const showPhotoSection =
+    issueId && onFilesSelected && onDeletePhoto && onPhotoClick;
 
   return (
     <div
@@ -158,6 +149,19 @@ export function IssueFormPanel({
               </p>
             )}
           </div>
+
+          {showPhotoSection && (
+            <PhotoUploader
+              phase={photoPhase}
+              onPhaseChange={setPhotoPhase}
+              onFilesSelected={onFilesSelected}
+              uploading={uploading}
+              photos={photos}
+              onDeletePhoto={onDeletePhoto}
+              onPhotoClick={onPhotoClick}
+              isDeletePending={isDeletePending}
+            />
+          )}
         </div>
 
         <div className="flex gap-2 px-4 py-3 border-t border-zinc-100">

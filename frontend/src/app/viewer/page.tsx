@@ -1,12 +1,21 @@
 "use client";
 
+import { useCallback, useRef } from "react";
 import { ApsViewer } from "./aps-viewer";
 import { useApsViewer } from "./aps-viewer.hooks";
-import type { IssueFormValues } from "./issue-form";
 import { IssueFormPanel } from "./issue-form";
+import type { IssueFormValues } from "./issue-form.hooks";
 import { IssuePinsOverlay, PinMarker } from "./issue-pins";
 import { useIssuePins } from "./issue-pins.hooks";
 import { useCreateIssue, useIssues } from "./issues-state.hooks";
+import { PhotoComparison } from "./photo-comparison";
+import { PhotoLightbox } from "./photo-lightbox";
+import {
+  useDeletePhoto,
+  useIssueDetail,
+  usePhotoUpload,
+} from "./photo-upload.hooks";
+import { usePhotoViewer } from "./photo-viewer.hooks";
 import { usePlacementMode } from "./placement-mode.hooks";
 
 // TODO: 認証実装後に動的に取得する
@@ -33,6 +42,32 @@ export default function ViewerPage() {
     issues,
   );
 
+  // Photo viewer state
+  const {
+    lightbox,
+    openLightbox,
+    closeLightbox,
+    navigateLightbox,
+    comparison,
+    openComparison,
+    closeComparison,
+  } = usePhotoViewer();
+
+  // Track created issue ID for photo uploads after creation
+  const createdIssueIdRef = useRef<string | null>(null);
+
+  // Issue detail for photo operations — form takes priority over comparison
+  const formIssueId = createdIssueIdRef.current;
+  const comparisonIssueId = comparison.issueId;
+  const activeIssueId = formIssueId ?? comparisonIssueId;
+  const { data: issueDetail } = useIssueDetail(activeIssueId);
+  const {
+    uploading,
+    uploadFiles,
+    cleanup: cleanupUploads,
+  } = usePhotoUpload(activeIssueId, TEMP_REPORTER_ID);
+  const deletePhoto = useDeletePhoto(activeIssueId);
+
   const combinedLoading = isLoading || issuesLoading;
   const combinedError =
     error ||
@@ -44,37 +79,52 @@ export default function ViewerPage() {
 
   const isFormOpen = pendingPin !== null;
 
-  const handleFormSubmit = (data: IssueFormValues) => {
-    if (!pendingPin) return;
-    createIssue.mutate(
-      {
-        projectId: TEMP_PROJECT_ID,
-        title: data.title,
-        description: data.description,
-        category: data.category,
-        position: pendingPin.dbId
-          ? {
-              type: "component" as const,
-              dbId: pendingPin.dbId,
-              worldPosition: pendingPin.worldPosition,
-            }
-          : {
-              type: "spatial" as const,
-              worldPosition: pendingPin.worldPosition,
-            },
-        reporterId: TEMP_REPORTER_ID,
-      },
-      {
-        onSuccess: () => {
-          clearPendingPin();
+  const handleFormSubmit = useCallback(
+    (data: IssueFormValues) => {
+      if (!pendingPin) return;
+      createIssue.mutate(
+        {
+          projectId: TEMP_PROJECT_ID,
+          title: data.title,
+          description: data.description,
+          category: data.category,
+          position: pendingPin.dbId
+            ? {
+                type: "component" as const,
+                dbId: pendingPin.dbId,
+                worldPosition: pendingPin.worldPosition,
+              }
+            : {
+                type: "spatial" as const,
+                worldPosition: pendingPin.worldPosition,
+              },
+          reporterId: TEMP_REPORTER_ID,
         },
-      },
-    );
-  };
+        {
+          onSuccess: (result) => {
+            createdIssueIdRef.current = result.issueId;
+            // Don't close form yet — allow photo uploads
+          },
+        },
+      );
+    },
+    [pendingPin, createIssue],
+  );
 
-  const handleFormCancel = () => {
+  const handleFormCancel = useCallback(() => {
+    createdIssueIdRef.current = null;
+    cleanupUploads();
     clearPendingPin();
-  };
+  }, [cleanupUploads, clearPendingPin]);
+
+  const handleDeletePhoto = useCallback(
+    (photoId: string) => {
+      deletePhoto.mutate({ photoId, actorId: TEMP_REPORTER_ID });
+    },
+    [deletePhoto],
+  );
+
+  const photos = issueDetail?.photos ?? [];
 
   return (
     <div className="flex flex-col h-screen">
@@ -105,6 +155,7 @@ export default function ViewerPage() {
               selectedPin={selectedPin}
               onPinClick={isPlacementMode ? () => {} : handlePinClick}
               onClose={closePopup}
+              onComparePhotos={openComparison}
             />
             {pendingPin && (
               <div className="absolute inset-0 pointer-events-none z-20">
@@ -121,14 +172,43 @@ export default function ViewerPage() {
             )}
           </>
         )}
+
+        {/* Photo Comparison overlay */}
+        {comparison.isOpen && comparison.issueId && (
+          <div className="absolute bottom-4 left-4 z-30 w-[600px]">
+            <PhotoComparison
+              photos={photos}
+              onClose={closeComparison}
+              onPhotoClick={openLightbox}
+            />
+          </div>
+        )}
       </main>
+
       <IssueFormPanel
         isOpen={isFormOpen}
         defaultTitle={pendingPin?.objectName}
         onSubmit={handleFormSubmit}
         onCancel={handleFormCancel}
         isSubmitting={createIssue.isPending}
+        issueId={createdIssueIdRef.current}
+        photos={photos}
+        uploading={uploading}
+        onFilesSelected={uploadFiles}
+        onDeletePhoto={handleDeletePhoto}
+        onPhotoClick={openLightbox}
+        isDeletePending={deletePhoto.isPending}
       />
+
+      {/* Lightbox */}
+      {lightbox.isOpen && photos.length > 0 && (
+        <PhotoLightbox
+          photos={photos}
+          currentIndex={Math.min(lightbox.currentIndex, photos.length - 1)}
+          onClose={closeLightbox}
+          onNavigate={navigateLightbox}
+        />
+      )}
     </div>
   );
 }

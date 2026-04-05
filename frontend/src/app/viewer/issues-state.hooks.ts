@@ -17,6 +17,7 @@ function toIssuePin(item: IssueListItem): IssuePin {
     status: item.status,
     category: item.category,
     worldPosition: item.position.worldPosition,
+    photoCount: item.photoCount,
   };
 }
 

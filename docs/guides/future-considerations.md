@@ -67,8 +67,14 @@ Lambda + CQRS のようなスケーラブル構成でも、DB やストレージ
 
 ### Blob ストレージ
 
-- 写真のサムネイル生成（アップロード時に Lambda / Cloud Functions で処理）
+- サムネイル自動生成（アップロード confirm 時に Lambda / Cloud Functions でリサイズ）
+  - 複数サイズ生成: original, medium (800px), thumbnail (200px)
+  - WebP 変換でファイルサイズ削減
+  - 保存先: `confirmed/{issueId}/{phase}/{photoId}_thumb.webp`
 - CDN 経由での配信（CloudFront / Cloud CDN）
+  - 現在は MinIO の公開読み取りポリシーで配信（開発環境）
+  - 本番では Presigned GET URL または CDN に切り替え
+- プログレッシブローディング: サムネイル → 高解像度の段階的表示
 
 ### キャッシュ戦略
 
