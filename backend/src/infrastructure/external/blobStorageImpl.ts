@@ -97,10 +97,13 @@ const deleteObjectsByStream = (
     });
   });
 
-/** BlobStorage を生成する高階関数。 */
+/** BlobStorage を生成する高階関数。
+ * @param publicClient presigned URL 生成用クライアント（ブラウザからアクセス可能なエンドポイントで初期化）。省略時は client を使用。
+ */
 export const createBlobStorage = (
   client: Minio.Client,
   bucket: string,
+  publicClient?: Minio.Client,
 ): BlobStorage => ({
   generateUploadUrl: async (
     issueId: string,
@@ -115,7 +118,7 @@ export const createBlobStorage = (
     validateExt(ext);
 
     const key = pendingBlobPath(issueId, photoId, ext);
-    const uploadUrl = await client.presignedPutObject(
+    const uploadUrl = await (publicClient ?? client).presignedPutObject(
       bucket,
       key,
       PRESIGNED_URL_EXPIRY,
