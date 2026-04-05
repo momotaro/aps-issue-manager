@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { generateBase62Id } from "@/lib/generate-id";
 import { ApsViewer } from "./aps-viewer";
 import { useApsViewer } from "./aps-viewer.hooks";
@@ -55,6 +55,17 @@ export default function ViewerPage() {
     filters,
   );
 
+  // パネル開閉時に APS Viewer をリサイズ
+  const isFormOpen = pendingPin !== null;
+  useEffect(() => {
+    if (!viewer) return;
+    // isListOpen / isFormOpen の変化でリサイズをトリガー
+    void isListOpen;
+    void isFormOpen;
+    const timer = setTimeout(() => viewer.resize(), 50);
+    return () => clearTimeout(timer);
+  }, [viewer, isListOpen, isFormOpen]);
+
   // Photo viewer state
   const {
     lightbox,
@@ -99,8 +110,6 @@ export default function ViewerPage() {
       : issuesError
         ? "指摘の取得に失敗しました"
         : null);
-
-  const isFormOpen = pendingPin !== null;
 
   // Camera navigation
   const { navigateToIssue } = useCameraNavigation(viewer);

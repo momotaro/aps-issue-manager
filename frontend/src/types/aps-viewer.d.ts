@@ -36,6 +36,7 @@ declare namespace Autodesk {
         event: string,
         callback: (e: CameraChangedEvent) => void,
       ): void;
+      resize(): void;
       fitToView(dbIds?: number[], model?: Model, immediate?: boolean): void;
       navigation: Navigation;
       worldToClient(point: THREE.Vector3): THREE.Vector3;
