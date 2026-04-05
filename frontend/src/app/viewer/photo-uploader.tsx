@@ -268,18 +268,24 @@ function UploadingThumbnail({
   progress: number;
 }) {
   return (
-    <div className="relative w-16 h-16">
-      <div className="w-full h-full rounded-md bg-zinc-700 overflow-hidden opacity-60">
-        {/* biome-ignore lint/performance/noImgElement: local ObjectURL preview */}
-        <img
-          src={previewUrl}
-          alt="アップロード中"
-          className="w-full h-full object-cover"
-        />
+    <div className="relative w-16 h-16 rounded-md overflow-hidden bg-zinc-700">
+      {/* Grayed-out preview */}
+      {/* biome-ignore lint/performance/noImgElement: local ObjectURL preview */}
+      <img
+        src={previewUrl}
+        alt="アップロード中"
+        className="w-full h-full object-cover opacity-40 grayscale"
+      />
+      {/* Progress percentage overlay */}
+      <div className="absolute inset-0 flex items-center justify-center">
+        <span className="text-white text-xs font-semibold drop-shadow-md">
+          {progress}%
+        </span>
       </div>
-      <div className="absolute bottom-0 left-0 right-0 h-[3px]">
+      {/* Progress bar — bottom, 3px height, blue */}
+      <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-zinc-600">
         <div
-          className="h-full bg-blue-500 rounded-b-md transition-all duration-200"
+          className="h-full bg-blue-500 rounded-sm transition-all duration-200"
           style={{ width: `${progress}%` }}
         />
       </div>

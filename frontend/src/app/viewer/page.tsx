@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef } from "react";
+import { useCallback, useState } from "react";
 import { ApsViewer } from "./aps-viewer";
 import { useApsViewer } from "./aps-viewer.hooks";
 import { IssueFormPanel } from "./issue-form";
@@ -54,10 +54,10 @@ export default function ViewerPage() {
   } = usePhotoViewer();
 
   // Track created issue ID for photo uploads after creation
-  const createdIssueIdRef = useRef<string | null>(null);
+  const [createdIssueId, setCreatedIssueId] = useState<string | null>(null);
 
   // Issue detail for photo operations — form takes priority over comparison
-  const formIssueId = createdIssueIdRef.current;
+  const formIssueId = createdIssueId;
   const comparisonIssueId = comparison.issueId;
   const activeIssueId = formIssueId ?? comparisonIssueId;
   const { data: issueDetail } = useIssueDetail(activeIssueId);
@@ -83,7 +83,7 @@ export default function ViewerPage() {
 
   const handleFormSubmit = useCallback(
     (data: IssueFormValues) => {
-      if (!pendingPin) return;
+      if (!pendingPin || createdIssueId) return;
       createIssue.mutate(
         {
           projectId: TEMP_PROJECT_ID,
@@ -104,17 +104,16 @@ export default function ViewerPage() {
         },
         {
           onSuccess: (result) => {
-            createdIssueIdRef.current = result.issueId;
-            // Don't close form yet — allow photo uploads
+            setCreatedIssueId(result.issueId);
           },
         },
       );
     },
-    [pendingPin, createIssue],
+    [pendingPin, createIssue, createdIssueId],
   );
 
   const handleFormCancel = useCallback(() => {
-    createdIssueIdRef.current = null;
+    setCreatedIssueId(null);
     cleanupUploads();
     clearPendingPin();
   }, [cleanupUploads, clearPendingPin]);
