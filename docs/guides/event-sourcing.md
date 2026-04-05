@@ -97,7 +97,7 @@ API レスポンス（DTO）
 | `IssueStatusChanged` | ステータス遷移 | `from`, `to` |
 | `IssueCategoryChanged` | 種別変更 | `category` |
 | `IssueAssigneeChanged` | 担当者変更 | `assigneeId` |
-| `PhotoAdded` | 写真追加 | `photo` |
+| `PhotoAdded` | 写真追加 | `photo`（`storagePath` は確定的に計算した `confirmed/` パスを記録） |
 | `PhotoRemoved` | 写真削除 | `photoId` |
 
 ### イベントの構造
