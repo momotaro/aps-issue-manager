@@ -3,10 +3,8 @@ import {
   type ApsClient,
   createApsClient,
 } from "./infrastructure/external/apsClient.js";
-import {
-  type BlobStorageConfig,
-  createBlobStorage,
-} from "./infrastructure/external/blobStorageImpl.js";
+import { createBlobStorage } from "./infrastructure/external/blobStorageImpl.js";
+import { createMinioClient } from "./infrastructure/external/minioClient.js";
 import { createEventProjector } from "./infrastructure/persistence/eventProjectorImpl.js";
 import { createEventStore } from "./infrastructure/persistence/eventStoreImpl.js";
 import { createIssueQueryService } from "./infrastructure/persistence/issueQueryServiceImpl.js";
@@ -20,17 +18,6 @@ const requireEnv = (name: string): string => {
     throw new Error(`Missing required environment variable: ${name}`);
   }
   return value;
-};
-
-const minioHost = requireEnv("MINIO_ENDPOINT");
-const minioPort = requireEnv("MINIO_PORT");
-
-const blobConfig: BlobStorageConfig = {
-  endpoint: `http://${minioHost}:${minioPort}`,
-  region: process.env.MINIO_REGION ?? "us-east-1",
-  bucket: requireEnv("MINIO_BUCKET"),
-  accessKeyId: requireEnv("MINIO_ACCESS_KEY"),
-  secretAccessKey: requireEnv("MINIO_SECRET_KEY"),
 };
 
 // --- Factory ---
@@ -48,7 +35,16 @@ export const userRepository = createUserRepository(db);
 export const projectRepository = createProjectRepository(db);
 
 // --- Services ---
-export const blobStorage = createBlobStorage(blobConfig);
+const minioClient = createMinioClient({
+  endPoint: requireEnv("MINIO_ENDPOINT"),
+  port: Number(requireEnv("MINIO_PORT")),
+  accessKey: requireEnv("MINIO_ACCESS_KEY"),
+  secretKey: requireEnv("MINIO_SECRET_KEY"),
+});
+export const blobStorage = createBlobStorage(
+  minioClient,
+  requireEnv("MINIO_BUCKET"),
+);
 
 // --- APS (optional) ---
 const apsClientId = process.env.APS_CLIENT_ID;

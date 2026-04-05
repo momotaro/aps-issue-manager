@@ -52,7 +52,6 @@ const createMockIssueRepo = (
 const createMockBlobStorage = (
   overrides?: Partial<BlobStorage>,
 ): BlobStorage => ({
-  uploadPending: vi.fn(),
   generateUploadUrl: vi.fn().mockResolvedValue({
     uploadUrl: "https://minio.example.com/presigned-url",
   }),

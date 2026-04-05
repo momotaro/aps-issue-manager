@@ -5,10 +5,11 @@
  * 写真ファイルの永続化を抽象化するドメインサービス。
  * ドメイン層は MinIO/S3 の詳細を知らず、このインターフェースを通じて操作する。
  *
- * ライフサイクル:
- * 1. `uploadPending` — `pending/` プレフィックスにアップロード
- * 2. `confirmPending` — DB 登録後に `confirmed/` プレフィックスへ移動
- * 3. `pending/` の10分超過ファイルは minio-cleanup が自動削除
+ * ライフサイクル（Presigned URL 方式）:
+ * 1. `generateUploadUrl` — `pending/` プレフィックスへの Presigned PUT URL を発行
+ * 2. フロントエンドが Presigned URL で直接アップロード
+ * 3. `confirmPending` — DB 登録後に `confirmed/` プレフィックスへ移動
+ * 4. `pending/` の10分超過ファイルは minio-cleanup が自動削除
  */
 
 import type { Photo, PhotoPhase } from "../valueObjects/photo.js";
@@ -18,7 +19,7 @@ import type { Photo, PhotoPhase } from "../valueObjects/photo.js";
  */
 export type BlobStorage = {
   /**
-   * ファイルを pending 状態でアップロードする。
+   * 写真アップロード用の Presigned PUT URL を発行する。
    *
    * @remarks
    * アップロード先: `pending/{issueId}/{photoId}.{ext}`
@@ -26,16 +27,16 @@ export type BlobStorage = {
    *
    * @param issueId - 対象の指摘 ID
    * @param photoId - 写真の ID
-   * @param data - ファイルのバイナリデータ
-   * @param ext - ファイル拡張子（例: `jpg`）
-   * @returns アップロード先のストレージパス
+   * @param fileName - 元のファイル名（拡張子を抽出するために使用）
+   * @param phase - 撮影フェーズ
+   * @returns Presigned PUT URL
    */
-  readonly uploadPending: (
+  readonly generateUploadUrl: (
     issueId: string,
     photoId: string,
-    data: Buffer,
-    ext: string,
-  ) => Promise<string>;
+    fileName: string,
+    phase: PhotoPhase,
+  ) => Promise<{ uploadUrl: string }>;
 
   /**
    * pending 状態のファイルを confirmed に移動する。
@@ -64,25 +65,9 @@ export type BlobStorage = {
   readonly deleteByIssue: (issueId: string) => Promise<void>;
 
   /**
-   * 写真アップロード用の Presigned URL を発行する。
-   *
-   * @param issueId - 対象の指摘 ID
-   * @param photoId - 写真の ID
-   * @param fileName - 元のファイル名
-   * @param phase - 撮影フェーズ
-   * @returns Presigned URL
-   */
-  readonly generateUploadUrl: (
-    issueId: string,
-    photoId: string,
-    fileName: string,
-    phase: PhotoPhase,
-  ) => Promise<{ uploadUrl: string }>;
-
-  /**
    * 写真ファイルを個別に削除する。
    *
-   * @param storagePath - 削除対象のストレージパス
+   * @param storagePath - 削除対象のストレージパス（`confirmed/` プレフィックス）
    */
   readonly deletePhoto: (storagePath: string) => Promise<void>;
 };
