@@ -175,13 +175,10 @@ export function PhotoUploader({
             />
           ))}
           {currentPendingConfirms.map((pc) => (
-            <PhotoThumbnail
+            <PendingThumbnail
               key={pc.photoId}
-              src={pc.previewUrl}
+              previewUrl={pc.previewUrl}
               fileName={pc.fileName}
-              onDelete={() => {}}
-              onClick={() => {}}
-              isDeletePending={false}
             />
           ))}
           {currentUploading.map((photo) => (
@@ -253,6 +250,30 @@ function PhotoThumbnail({
           />
         </svg>
       </button>
+    </div>
+  );
+}
+
+function PendingThumbnail({
+  previewUrl,
+  fileName,
+}: {
+  previewUrl: string;
+  fileName: string;
+}) {
+  return (
+    <div className="relative w-16 h-16 rounded-md overflow-hidden bg-zinc-700 opacity-60">
+      {/* biome-ignore lint/performance/noImgElement: local ObjectURL preview */}
+      <img
+        src={previewUrl}
+        alt={fileName}
+        className="w-full h-full object-cover"
+      />
+      <div className="absolute inset-0 flex items-center justify-center">
+        <span className="text-white text-[10px] font-medium drop-shadow-md">
+          確認待ち
+        </span>
+      </div>
     </div>
   );
 }

@@ -13,6 +13,7 @@ interface IssueFormPanelProps {
   onSubmit: (data: IssueFormValues) => void;
   onCancel: () => void;
   isSubmitting?: boolean;
+  isUploading?: boolean;
   photos?: PhotoItem[];
   uploading?: UploadingPhoto[];
   pendingConfirms?: PendingConfirm[];
@@ -30,6 +31,7 @@ export function IssueFormPanel({
   onSubmit,
   onCancel,
   isSubmitting = false,
+  isUploading = false,
   photos = [],
   uploading = [],
   pendingConfirms = [],
@@ -173,10 +175,14 @@ export function IssueFormPanel({
           </button>
           <button
             type="submit"
-            disabled={isSubmitting}
+            disabled={isSubmitting || isUploading}
             className="flex-1 rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isSubmitting ? "作成中..." : "作成"}
+            {isSubmitting
+              ? "作成中..."
+              : isUploading
+                ? "アップロード中..."
+                : "作成"}
           </button>
         </div>
       </form>

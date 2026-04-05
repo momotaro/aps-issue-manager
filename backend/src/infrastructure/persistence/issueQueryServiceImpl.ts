@@ -133,7 +133,7 @@ const toListItem = (
   updatedAt: row.updatedAt,
 });
 
-/** pending/ パスを confirmed/ パスに正規化する。イベント保存時は pending/ で記録されるため。 */
+/** 旧データ互換のため、legacy な pending/ パスを confirmed/ パスへ正規化する。 */
 const normalizeStoragePath = (photo: Record<string, unknown>): string => {
   const path = photo.storagePath;
   if (typeof path !== "string") return String(path ?? "");
