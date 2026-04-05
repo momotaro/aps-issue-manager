@@ -2,10 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import type { Issue } from "../../domain/entities/issue.js";
 import { applyEvent, createIssue } from "../../domain/entities/issue.js";
 import type { IssueRepository } from "../../domain/repositories/issueRepository.js";
-import type {
-  IssueId,
-  ProjectId,
-  UserId,
+import {
+  generateId,
+  type IssueId,
+  type ProjectId,
+  type UserId,
 } from "../../domain/valueObjects/brandedId.js";
 import { createSpatialPosition } from "../../domain/valueObjects/position.js";
 import { updateIssueUseCase } from "./updateIssueUseCase.js";
@@ -19,6 +20,7 @@ const actorId = "user-1" as UserId;
 /** テスト用の Issue 集約を作成する */
 const makeIssue = (): Issue => {
   const result = createIssue({
+    issueId: generateId<IssueId>(),
     projectId: "project-1" as ProjectId,
     title: "外壁タイルの浮き",
     description: "北側外壁3階部分にタイルの浮きを確認",

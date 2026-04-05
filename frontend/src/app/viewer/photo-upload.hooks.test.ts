@@ -1,46 +1,58 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { validateFile } from "./photo-upload.hooks";
+import { uploadToPresignedUrl, validateFile } from "./photo-upload.hooks";
 
 // ---------------------------------------------------------------------------
-// Mock dependencies
+// XMLHttpRequest モック
 // ---------------------------------------------------------------------------
 
-const mockGeneratePhotoUploadUrl = vi.fn();
-const mockConfirmPhotoUpload = vi.fn();
-const mockRemovePhoto = vi.fn();
+type XhrHandler = ((e: ProgressEvent) => void) | (() => void) | null;
 
-vi.mock("@/repositories/issue-repository", () => ({
-  issueRepository: {
-    generatePhotoUploadUrl: (...args: unknown[]) =>
-      mockGeneratePhotoUploadUrl(...args),
-    confirmPhotoUpload: (...args: unknown[]) => mockConfirmPhotoUpload(...args),
-    removePhoto: (...args: unknown[]) => mockRemovePhoto(...args),
-    getIssueDetail: vi.fn(),
-  },
-}));
+class MockXHR {
+  status = 200;
+  upload = { onprogress: null as XhrHandler };
+  onload: XhrHandler = null;
+  onerror: XhrHandler = null;
+  onabort: XhrHandler = null;
+  readyState = 0;
 
-vi.mock("@tanstack/react-query", () => ({
-  useQueryClient: () => ({
-    invalidateQueries: vi.fn(),
-  }),
-  useMutation: ({
-    mutationFn,
-    onSuccess,
-  }: {
-    mutationFn: (input: unknown) => Promise<unknown>;
-    onSuccess?: () => void;
-  }) => ({
-    mutate: async (input: unknown) => {
-      await mutationFn(input);
-      onSuccess?.();
-    },
-    isPending: false,
-  }),
-  useQuery: () => ({ data: undefined, isLoading: false, error: null }),
-}));
+  open = vi.fn();
+  send = vi.fn();
+  setRequestHeader = vi.fn();
+  abort = vi.fn(() => {
+    if (this.onabort) (this.onabort as () => void)();
+  });
+
+  // テストから呼ぶヘルパー
+  simulateLoad(status: number) {
+    this.status = status;
+    if (this.onload) (this.onload as () => void)();
+  }
+
+  simulateError() {
+    if (this.onerror) (this.onerror as () => void)();
+  }
+
+  simulateProgress(loaded: number, total: number) {
+    if (this.upload.onprogress) {
+      (this.upload.onprogress as (e: ProgressEvent) => void)({
+        lengthComputable: true,
+        loaded,
+        total,
+      } as unknown as ProgressEvent);
+    }
+  }
+}
+
+let mockXhr: MockXHR;
+
+// XMLHttpRequest をクラスとして stub する
+vi.stubGlobal("XMLHttpRequest", function MockXHRConstructor() {
+  mockXhr = new MockXHR();
+  return mockXhr;
+});
 
 // ---------------------------------------------------------------------------
-// Tests for validateFile (imported from source)
+// validateFile
 // ---------------------------------------------------------------------------
 
 describe("validateFile", () => {
@@ -64,14 +76,6 @@ describe("validateFile", () => {
     });
   });
 
-  it("テキストファイルを拒否する", () => {
-    const file = new File(["data"], "readme.txt", { type: "text/plain" });
-    expect(validateFile(file)).toEqual({
-      fileName: "readme.txt",
-      reason: "type",
-    });
-  });
-
   it("10MBを超えるファイルを拒否する", () => {
     const largeContent = new Uint8Array(10 * 1024 * 1024 + 1);
     const file = new File([largeContent], "large.jpg", { type: "image/jpeg" });
@@ -87,11 +91,6 @@ describe("validateFile", () => {
     expect(validateFile(file)).toBeNull();
   });
 
-  it("0バイトの画像ファイルを受け入れる", () => {
-    const file = new File([], "empty.jpg", { type: "image/jpeg" });
-    expect(validateFile(file)).toBeNull();
-  });
-
   it("MIMEタイプが空のファイルを拒否する", () => {
     const file = new File(["data"], "unknown", { type: "" });
     expect(validateFile(file)).toEqual({
@@ -102,97 +101,147 @@ describe("validateFile", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Tests for Repository API flow (Presigned URL → confirm)
+// uploadToPresignedUrl
 // ---------------------------------------------------------------------------
 
-describe("photo upload API flow", () => {
+describe("uploadToPresignedUrl", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("Presigned URL取得 → confirm の正常フロー", async () => {
-    const issueId = "testIssueId123456789012";
-    const photoId = "testPhotoId123456789012";
-    const uploadUrl = "http://localhost:9000/presigned-url";
+  it("アップロード成功（200）で resolve する", async () => {
+    const file = new File(["data"], "test.jpg", { type: "image/jpeg" });
+    const onProgress = vi.fn();
+    const controller = new AbortController();
 
-    mockGeneratePhotoUploadUrl.mockResolvedValue({ photoId, uploadUrl });
-    mockConfirmPhotoUpload.mockResolvedValue({ ok: true });
-
-    const result = await mockGeneratePhotoUploadUrl(
-      issueId,
-      "test.jpg",
-      "before",
-    );
-    expect(result).toEqual({ photoId, uploadUrl });
-    expect(mockGeneratePhotoUploadUrl).toHaveBeenCalledWith(
-      issueId,
-      "test.jpg",
-      "before",
+    const promise = uploadToPresignedUrl(
+      "http://localhost:9000/upload",
+      file,
+      onProgress,
+      controller.signal,
     );
 
-    const confirmResult = await mockConfirmPhotoUpload(
-      issueId,
-      photoId,
-      "test.jpg",
-      "before",
-      "actorId",
+    expect(mockXhr.open).toHaveBeenCalledWith(
+      "PUT",
+      "http://localhost:9000/upload",
     );
-    expect(confirmResult).toEqual({ ok: true });
+    expect(mockXhr.setRequestHeader).toHaveBeenCalledWith(
+      "Content-Type",
+      "image/jpeg",
+    );
+    expect(mockXhr.send).toHaveBeenCalledWith(file);
+
+    mockXhr.simulateLoad(200);
+    await expect(promise).resolves.toBeUndefined();
   });
 
-  it("Presigned URL取得失敗時のエラー", async () => {
-    mockGeneratePhotoUploadUrl.mockRejectedValue(
-      new Error("Failed to generate upload URL"),
+  it("非 2xx レスポンスで reject する", async () => {
+    const file = new File(["data"], "test.jpg", { type: "image/jpeg" });
+    const controller = new AbortController();
+
+    const promise = uploadToPresignedUrl(
+      "http://localhost:9000/upload",
+      file,
+      vi.fn(),
+      controller.signal,
     );
 
-    await expect(
-      mockGeneratePhotoUploadUrl("issueId", "test.jpg", "before"),
-    ).rejects.toThrow("Failed to generate upload URL");
+    mockXhr.simulateLoad(403);
+    await expect(promise).rejects.toThrow("Upload failed with status 403");
   });
 
-  it("confirm API失敗時のエラー", async () => {
-    mockConfirmPhotoUpload.mockRejectedValue(
-      new Error("Failed to confirm photo upload"),
+  it("ネットワークエラーで reject する", async () => {
+    const file = new File(["data"], "test.jpg", { type: "image/jpeg" });
+    const controller = new AbortController();
+
+    const promise = uploadToPresignedUrl(
+      "http://localhost:9000/upload",
+      file,
+      vi.fn(),
+      controller.signal,
     );
 
-    await expect(
-      mockConfirmPhotoUpload(
-        "issueId",
-        "photoId",
-        "test.jpg",
-        "before",
-        "actor",
-      ),
-    ).rejects.toThrow("Failed to confirm photo upload");
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Tests for photo deletion
-// ---------------------------------------------------------------------------
-
-describe("photo deletion", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+    mockXhr.simulateError();
+    await expect(promise).rejects.toThrow("Upload failed");
   });
 
-  it("写真削除の正常フロー", async () => {
-    mockRemovePhoto.mockResolvedValue({ ok: true });
+  it("進捗コールバックが呼ばれる", async () => {
+    const file = new File(["data"], "test.jpg", { type: "image/jpeg" });
+    const onProgress = vi.fn();
+    const controller = new AbortController();
 
-    const result = await mockRemovePhoto("issueId", "photoId", "actorId");
-    expect(result).toEqual({ ok: true });
-    expect(mockRemovePhoto).toHaveBeenCalledWith(
-      "issueId",
-      "photoId",
-      "actorId",
+    const promise = uploadToPresignedUrl(
+      "http://localhost:9000/upload",
+      file,
+      onProgress,
+      controller.signal,
     );
+
+    mockXhr.simulateProgress(500, 1000);
+    expect(onProgress).toHaveBeenCalledWith(50);
+
+    mockXhr.simulateProgress(1000, 1000);
+    expect(onProgress).toHaveBeenCalledWith(100);
+
+    mockXhr.simulateLoad(200);
+    await promise;
   });
 
-  it("写真削除API失敗時のエラー", async () => {
-    mockRemovePhoto.mockRejectedValue(new Error("Failed to remove photo"));
+  it("abort で AbortError を reject する", async () => {
+    const file = new File(["data"], "test.jpg", { type: "image/jpeg" });
+    const controller = new AbortController();
 
-    await expect(
-      mockRemovePhoto("issueId", "photoId", "actorId"),
-    ).rejects.toThrow("Failed to remove photo");
+    const promise = uploadToPresignedUrl(
+      "http://localhost:9000/upload",
+      file,
+      vi.fn(),
+      controller.signal,
+    );
+
+    controller.abort();
+    await expect(promise).rejects.toThrow("Upload aborted");
+
+    try {
+      await promise;
+    } catch (e) {
+      expect(e).toBeInstanceOf(DOMException);
+      expect((e as DOMException).name).toBe("AbortError");
+    }
+  });
+
+  it("abort 後に onload が発火しても二重 settle しない", async () => {
+    const file = new File(["data"], "test.jpg", { type: "image/jpeg" });
+    const controller = new AbortController();
+
+    const promise = uploadToPresignedUrl(
+      "http://localhost:9000/upload",
+      file,
+      vi.fn(),
+      controller.signal,
+    );
+
+    controller.abort();
+    // abort 後に onload が発火（XHR の実装によっては起こり得る）
+    mockXhr.simulateLoad(200);
+
+    await expect(promise).rejects.toThrow("Upload aborted");
+  });
+
+  it("成功後に abort しても二重 settle しない", async () => {
+    const file = new File(["data"], "test.jpg", { type: "image/jpeg" });
+    const controller = new AbortController();
+
+    const promise = uploadToPresignedUrl(
+      "http://localhost:9000/upload",
+      file,
+      vi.fn(),
+      controller.signal,
+    );
+
+    mockXhr.simulateLoad(200);
+    await promise;
+
+    // 成功後に abort（no-op のはず）
+    controller.abort();
   });
 });

@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef } from "react";
+import { generateBase62Id } from "@/lib/generate-id";
 import { ApsViewer } from "./aps-viewer";
 import { useApsViewer } from "./aps-viewer.hooks";
 import { IssueFormPanel } from "./issue-form";
@@ -53,19 +54,27 @@ export default function ViewerPage() {
     closeComparison,
   } = usePhotoViewer();
 
-  // Track created issue ID for photo uploads after creation
-  const [createdIssueId, setCreatedIssueId] = useState<string | null>(null);
+  // フォーム表示時に事前生成する issueId（レンダリング中に同期的に設定）
+  const preIssueIdRef = useRef<string | null>(null);
+  if (pendingPin && !preIssueIdRef.current) {
+    preIssueIdRef.current = generateBase62Id();
+  }
+  if (!pendingPin) {
+    preIssueIdRef.current = null;
+  }
+  const preIssueId = preIssueIdRef.current;
 
-  // Issue detail for photo operations — form takes priority over comparison
-  const formIssueId = createdIssueId;
-  const comparisonIssueId = comparison.issueId;
-  const activeIssueId = formIssueId ?? comparisonIssueId;
-  const { data: issueDetail } = useIssueDetail(activeIssueId);
+  // Issue detail for photo operations
+  const activeIssueId = preIssueId ?? comparison.issueId;
+  // preIssueId は作成成功後のみ detail を取得（未作成時は 404 になるため）
+  const issueDetailId =
+    (createIssue.isSuccess ? preIssueId : null) ?? comparison.issueId;
+  const { data: issueDetail } = useIssueDetail(issueDetailId);
   const {
     uploading,
-    staged,
+    pendingConfirms,
     addFiles,
-    removeStaged,
+    confirmPending,
     cleanup: cleanupUploads,
   } = usePhotoUpload(activeIssueId, TEMP_REPORTER_ID);
   const deletePhoto = useDeletePhoto(activeIssueId);
@@ -83,9 +92,10 @@ export default function ViewerPage() {
 
   const handleFormSubmit = useCallback(
     (data: IssueFormValues) => {
-      if (!pendingPin || createdIssueId) return;
+      if (!pendingPin || !preIssueId) return;
       createIssue.mutate(
         {
+          issueId: preIssueId,
           projectId: TEMP_PROJECT_ID,
           title: data.title,
           description: data.description,
@@ -103,17 +113,19 @@ export default function ViewerPage() {
           reporterId: TEMP_REPORTER_ID,
         },
         {
-          onSuccess: (result) => {
-            setCreatedIssueId(result.issueId);
+          onSuccess: () => {
+            confirmPending();
+            preIssueIdRef.current = null;
+            clearPendingPin();
           },
         },
       );
     },
-    [pendingPin, createIssue, createdIssueId],
+    [pendingPin, createIssue, preIssueId, confirmPending, clearPendingPin],
   );
 
   const handleFormCancel = useCallback(() => {
-    setCreatedIssueId(null);
+    preIssueIdRef.current = null;
     cleanupUploads();
     clearPendingPin();
   }, [cleanupUploads, clearPendingPin]);
@@ -194,10 +206,9 @@ export default function ViewerPage() {
         isSubmitting={createIssue.isPending}
         photos={photos}
         uploading={uploading}
-        staged={staged}
+        pendingConfirms={pendingConfirms}
         onFilesSelected={addFiles}
         onDeletePhoto={handleDeletePhoto}
-        onRemoveStaged={removeStaged}
         onPhotoClick={openLightbox}
         isDeletePending={deletePhoto.isPending}
       />

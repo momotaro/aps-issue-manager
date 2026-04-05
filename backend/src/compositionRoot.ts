@@ -23,7 +23,16 @@ const requireEnv = (name: string): string => {
 };
 
 const minioHost = requireEnv("MINIO_ENDPOINT");
-const minioPort = requireEnv("MINIO_PORT");
+const minioPort = (() => {
+  const raw = requireEnv("MINIO_PORT");
+  const port = Number(raw);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error(
+      `Invalid MINIO_PORT: "${raw}" — must be an integer between 1 and 65535`,
+    );
+  }
+  return port;
+})();
 
 const minioPublicHost = process.env.MINIO_PUBLIC_ENDPOINT;
 

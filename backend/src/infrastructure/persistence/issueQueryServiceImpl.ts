@@ -135,15 +135,19 @@ const toListItem = (
 
 /** pending/ パスを confirmed/ パスに正規化する。イベント保存時は pending/ で記録されるため。 */
 const normalizeStoragePath = (photo: Record<string, unknown>): string => {
-  const path = photo.storagePath as string;
+  const path = photo.storagePath;
+  if (typeof path !== "string") return String(path ?? "");
   if (!path.startsWith("pending/")) return path;
   // pending/{issueId}/{photoId}.{ext} → confirmed/{issueId}/{phase}/{photoId}.{ext}
   const parts = path.split("/"); // ["pending", issueId, "photoId.ext"]
+  if (parts.length < 3) return path;
   const issueId = parts[1];
   const fileName = parts[2]; // "photoId.ext"
+  if (!issueId || !fileName) return path;
+  const phase = photo.phase;
+  if (phase !== "before" && phase !== "after") return path;
   const photoId = fileName.split(".")[0];
   const ext = fileName.split(".").pop() ?? "";
-  const phase = photo.phase as "before" | "after";
   return confirmedBlobPath(issueId, phase, photoId, ext);
 };
 

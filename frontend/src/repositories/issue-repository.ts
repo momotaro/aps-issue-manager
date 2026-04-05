@@ -40,6 +40,7 @@ export type IssueDetail = IssueListItem & {
 };
 
 export type CreateIssueInput = {
+  issueId: string;
   projectId: string;
   title: string;
   description: string;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { PhotoPhase } from "@/repositories/issue-repository";
 import { issueRepository } from "@/repositories/issue-repository";
 
@@ -15,8 +15,9 @@ export type UploadingPhoto = {
   previewUrl: string;
 };
 
-export type StagedFile = {
-  file: File;
+export type PendingConfirm = {
+  photoId: string;
+  fileName: string;
   phase: PhotoPhase;
   previewUrl: string;
 };
@@ -38,7 +39,8 @@ export function validateFile(file: File): FileValidationError | null {
   return null;
 }
 
-function uploadToPresignedUrl(
+/** @internal テスト用にエクスポート */
+export function uploadToPresignedUrl(
   url: string,
   file: File,
   onProgress: (progress: number) => void,
@@ -46,10 +48,18 @@ function uploadToPresignedUrl(
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
+    let settled = false;
+
+    const settle = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener("abort", abortHandler);
+      fn();
+    };
 
     const abortHandler = () => {
       xhr.abort();
-      reject(new DOMException("Upload aborted", "AbortError"));
+      settle(() => reject(new DOMException("Upload aborted", "AbortError")));
     };
     signal.addEventListener("abort", abortHandler);
 
@@ -60,17 +70,21 @@ function uploadToPresignedUrl(
     };
 
     xhr.onload = () => {
-      signal.removeEventListener("abort", abortHandler);
       if (xhr.status >= 200 && xhr.status < 300) {
-        resolve();
+        settle(() => resolve());
       } else {
-        reject(new Error(`Upload failed with status ${xhr.status}`));
+        settle(() =>
+          reject(new Error(`Upload failed with status ${xhr.status}`)),
+        );
       }
     };
 
     xhr.onerror = () => {
-      signal.removeEventListener("abort", abortHandler);
-      reject(new Error("Upload failed"));
+      settle(() => reject(new Error("Upload failed")));
+    };
+
+    xhr.onabort = () => {
+      settle(() => reject(new DOMException("Upload aborted", "AbortError")));
     };
 
     xhr.open("PUT", url);
@@ -81,17 +95,21 @@ function uploadToPresignedUrl(
 
 export function usePhotoUpload(issueId: string | null, actorId: string) {
   const [uploading, setUploading] = useState<UploadingPhoto[]>([]);
-  const [staged, setStaged] = useState<StagedFile[]>([]);
+  const [pendingConfirms, setPendingConfirms] = useState<PendingConfirm[]>([]);
   const [errors, setErrors] = useState<FileValidationError[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
   const uploadingRef = useRef(uploading);
   uploadingRef.current = uploading;
+  const pendingConfirmsRef = useRef(pendingConfirms);
+  pendingConfirmsRef.current = pendingConfirms;
   const queryClient = useQueryClient();
 
   const doUpload = useCallback(
     async (targetIssueId: string, files: File[], phase: PhotoPhase) => {
-      abortControllerRef.current?.abort();
-      const controller = new AbortController();
+      const controller =
+        abortControllerRef.current && !abortControllerRef.current.signal.aborted
+          ? abortControllerRef.current
+          : new AbortController();
       abortControllerRef.current = controller;
 
       for (const file of files) {
@@ -126,21 +144,12 @@ export function usePhotoUpload(issueId: string | null, actorId: string) {
             controller.signal,
           );
 
-          await issueRepository.confirmPhotoUpload(
-            targetIssueId,
-            photoId,
-            file.name,
-            phase,
-            actorId,
-          );
-
+          // アップロード完了 → pending confirm に追加（confirm は Issue 作成後）
           setUploading((prev) => prev.filter((p) => p.localId !== localId));
-          URL.revokeObjectURL(previewUrl);
-
-          queryClient.invalidateQueries({
-            queryKey: ISSUE_DETAIL_KEY(targetIssueId),
-          });
-          queryClient.invalidateQueries({ queryKey: ["issues"] });
+          setPendingConfirms((prev) => [
+            ...prev,
+            { photoId, fileName: file.name, phase, previewUrl },
+          ]);
         } catch (error) {
           URL.revokeObjectURL(previewUrl);
           setUploading((prev) => prev.filter((p) => p.localId !== localId));
@@ -155,10 +164,10 @@ export function usePhotoUpload(issueId: string | null, actorId: string) {
         }
       }
     },
-    [actorId, queryClient],
+    [],
   );
 
-  // Stage files locally or upload immediately
+  // ファイル選択時に即座にアップロード開始
   const addFiles = useCallback(
     (files: File[], phase: PhotoPhase) => {
       const validationErrors: FileValidationError[] = [];
@@ -177,52 +186,40 @@ export function usePhotoUpload(issueId: string | null, actorId: string) {
         setErrors((prev) => [...prev, ...validationErrors]);
       }
 
-      if (!issueId) {
-        // Stage locally — upload after issue creation
-        setStaged((prev) => [
-          ...prev,
-          ...validFiles.map((file) => ({
-            file,
-            phase,
-            previewUrl: URL.createObjectURL(file),
-          })),
-        ]);
-        return;
-      }
+      if (!issueId || validFiles.length === 0) return;
 
       doUpload(issueId, validFiles, phase);
     },
     [issueId, doUpload],
   );
 
-  // Remove a staged file
-  const removeStaged = useCallback((index: number) => {
-    setStaged((prev) => {
-      const removed = prev[index];
-      if (removed) URL.revokeObjectURL(removed.previewUrl);
-      return prev.filter((_, i) => i !== index);
-    });
-  }, []);
-
-  // Auto-upload staged files when issueId becomes available
-  const prevIssueIdRef = useRef(issueId);
-  useEffect(() => {
-    if (issueId && !prevIssueIdRef.current && staged.length > 0) {
-      // Group staged files by phase
-      const byPhase = new Map<PhotoPhase, File[]>();
-      for (const s of staged) {
-        const list = byPhase.get(s.phase) ?? [];
-        list.push(s.file);
-        byPhase.set(s.phase, list);
-        URL.revokeObjectURL(s.previewUrl);
-      }
-      setStaged([]);
-      for (const [phase, files] of byPhase) {
-        doUpload(issueId, files, phase);
+  // Issue 作成後に全 pending を一括 confirm
+  const confirmPending = useCallback(async () => {
+    if (!issueId) return;
+    const pending = pendingConfirmsRef.current;
+    for (const pc of pending) {
+      try {
+        await issueRepository.confirmPhotoUpload(
+          issueId,
+          pc.photoId,
+          pc.fileName,
+          pc.phase,
+          actorId,
+        );
+      } catch {
+        // confirm 失敗は致命的ではない — pending ファイルは TTL で自動削除
       }
     }
-    prevIssueIdRef.current = issueId;
-  }, [issueId, staged, doUpload]);
+    // confirm 完了後にプレビュー URL を解放
+    for (const pc of pending) {
+      URL.revokeObjectURL(pc.previewUrl);
+    }
+    setPendingConfirms([]);
+    queryClient.invalidateQueries({
+      queryKey: ISSUE_DETAIL_KEY(issueId),
+    });
+    queryClient.invalidateQueries({ queryKey: ["issues"] });
+  }, [issueId, actorId, queryClient]);
 
   const clearErrors = useCallback(() => setErrors([]), []);
 
@@ -231,20 +228,20 @@ export function usePhotoUpload(issueId: string | null, actorId: string) {
     for (const photo of uploadingRef.current) {
       URL.revokeObjectURL(photo.previewUrl);
     }
-    for (const s of staged) {
-      URL.revokeObjectURL(s.previewUrl);
+    for (const pc of pendingConfirmsRef.current) {
+      URL.revokeObjectURL(pc.previewUrl);
     }
     setUploading([]);
-    setStaged([]);
+    setPendingConfirms([]);
     setErrors([]);
-  }, [staged]);
+  }, []);
 
   return {
     uploading,
-    staged,
+    pendingConfirms,
     errors,
     addFiles,
-    removeStaged,
+    confirmPending,
     clearErrors,
     cleanup,
   };

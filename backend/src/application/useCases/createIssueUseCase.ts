@@ -31,6 +31,7 @@ import { err } from "../../domain/valueObjects/result.js";
 
 /** createIssueUseCase の入力。 */
 export type CreateIssueInput = {
+  readonly issueId: IssueId;
   readonly projectId: ProjectId;
   readonly title: string;
   readonly description: string;
@@ -68,6 +69,7 @@ export const createIssueUseCase =
   ): Promise<Result<CreateIssueOutput, DomainErrorDetail>> => {
     // ドメインコマンドで IssueCreated イベントを生成
     const result = createIssue({
+      issueId: input.issueId,
       projectId: input.projectId,
       title: input.title,
       description: input.description,

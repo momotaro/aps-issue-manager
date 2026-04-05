@@ -110,6 +110,7 @@ describe("issueRoutes", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          issueId: issueBase62,
           projectId: projectBase62,
           title: "新規指摘",
           description: "テスト",

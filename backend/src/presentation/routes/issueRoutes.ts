@@ -49,10 +49,7 @@ const getIssueHistory = getIssueHistoryUseCase(issueQueryService);
 const updateIssue = updateIssueUseCase(issueRepository);
 const changeStatus = changeIssueStatusUseCase(issueRepository);
 const deleteIssue = deleteIssueUseCase(issueRepository, blobStorage);
-const generateUploadUrl = generatePhotoUploadUrlUseCase(
-  issueRepository,
-  blobStorage,
-);
+const generateUploadUrl = generatePhotoUploadUrlUseCase(blobStorage);
 const confirmPhoto = confirmPhotoUploadUseCase(issueRepository, blobStorage);
 const removePhoto = removePhotoUseCase(issueRepository, blobStorage);
 
@@ -60,6 +57,7 @@ export const issueRoutes = new Hono()
   .post("/", zValidator("json", createIssueBodySchema), async (c) => {
     const body = c.req.valid("json");
     const result = await createIssue({
+      issueId: parseId<IssueId>(base62ToUuid(body.issueId)),
       projectId: parseId<ProjectId>(base62ToUuid(body.projectId)),
       title: body.title,
       description: body.description,

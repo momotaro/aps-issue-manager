@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { applyEvent, createIssue } from "../../domain/entities/issue.js";
 import type { IssueRepository } from "../../domain/repositories/issueRepository.js";
 import {
+  generateId,
   type IssueId,
   type ProjectId,
   parseId,
@@ -21,6 +22,7 @@ const reporterId = parseId<UserId>("01REPORTER00000000000REPORT");
 /** テスト用の Issue 状態を生成する（status: open, version: 1） */
 const makeIssue = () => {
   const result = createIssue({
+    issueId: generateId<IssueId>(),
     projectId,
     title: "壁のひび割れ",
     description: "3階東側の壁にひび割れを確認",

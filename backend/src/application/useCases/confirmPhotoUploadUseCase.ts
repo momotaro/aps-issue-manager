@@ -18,6 +18,7 @@ import type {
   UserId,
 } from "../../domain/valueObjects/brandedId.js";
 import {
+  confirmedBlobPath,
   createPhoto,
   type PhotoPhase,
   pendingBlobPath,
@@ -66,17 +67,22 @@ export const confirmPhotoUploadUseCase =
       });
     }
 
-    // pending パスで Photo 値オブジェクトを仮作成（confirmed パスはBlob移動後に確定）
-    const pendingPath = pendingBlobPath(input.issueId, input.photoId, ext);
+    // confirmed パスで Photo を作成（イベントには最終パスを記録する）
+    const confirmedPath = confirmedBlobPath(
+      input.issueId,
+      input.phase,
+      input.photoId,
+      ext,
+    );
     const photo = createPhoto({
       id: input.photoId,
       fileName: input.fileName,
-      storagePath: pendingPath,
+      storagePath: confirmedPath,
       phase: input.phase,
       uploadedAt: new Date(),
     });
 
-    // PhotoAdded イベントを生成（pending パスで仮登録）
+    // PhotoAdded イベントを生成（confirmed パスで記録）
     const eventResult = addPhoto(issue, photo, input.actorId);
     if (!eventResult.ok) return eventResult;
 
@@ -93,9 +99,13 @@ export const confirmPhotoUploadUseCase =
       });
     }
 
-    // pending → confirmed に移動
+    // pending → confirmed に移動（blob 操作には pending パスが必要）
+    const pendingPhoto = createPhoto({
+      ...photo,
+      storagePath: pendingBlobPath(input.issueId, input.photoId, ext),
+    });
     try {
-      await blobStorage.confirmPending(input.issueId, [photo]);
+      await blobStorage.confirmPending(input.issueId, [pendingPhoto]);
     } catch (error) {
       return err({
         code: "CONFIRM_FAILED",

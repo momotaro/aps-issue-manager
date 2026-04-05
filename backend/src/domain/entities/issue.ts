@@ -23,12 +23,11 @@ import type {
   PhotoAddedEvent,
   PhotoRemovedEvent,
 } from "../events/issueEvents.js";
-import {
-  generateId,
-  type IssueId,
-  type PhotoId,
-  type ProjectId,
-  type UserId,
+import type {
+  IssueId,
+  PhotoId,
+  ProjectId,
+  UserId,
 } from "../valueObjects/brandedId.js";
 import type { IssueCategory } from "../valueObjects/issueCategory.js";
 import type { IssueStatus } from "../valueObjects/issueStatus.js";
@@ -226,6 +225,7 @@ export const rehydrateFromSnapshot = (
  * @returns 成功時は `IssueCreatedEvent`、失敗時はエラー詳細
  */
 export const createIssue = (params: {
+  issueId: IssueId;
   projectId: ProjectId;
   title: string;
   description: string;
@@ -240,8 +240,7 @@ export const createIssue = (params: {
     return err({ code: "EMPTY_TITLE", message: "Title must not be empty" });
   }
 
-  const issueId = generateId<IssueId>();
-  const meta = createEventMeta(issueId, params.actorId, 1);
+  const meta = createEventMeta(params.issueId, params.actorId, 1);
 
   return ok(
     Object.freeze({
