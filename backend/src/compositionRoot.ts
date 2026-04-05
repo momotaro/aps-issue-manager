@@ -52,9 +52,20 @@ const minioClient = createMinioClient({
   accessKey: requireEnv("MINIO_ACCESS_KEY"),
   secretKey: requireEnv("MINIO_SECRET_KEY"),
 });
+const publicEndpoint = process.env.MINIO_PUBLIC_ENDPOINT;
+const publicMinioClient = publicEndpoint
+  ? createMinioClient({
+      endPoint: publicEndpoint,
+      port: requirePort("MINIO_PORT"),
+      accessKey: requireEnv("MINIO_ACCESS_KEY"),
+      secretKey: requireEnv("MINIO_SECRET_KEY"),
+      region: "us-east-1",
+    })
+  : undefined;
 export const blobStorage = createBlobStorage(
   minioClient,
   requireEnv("MINIO_BUCKET"),
+  publicMinioClient,
 );
 
 // --- APS (optional) ---

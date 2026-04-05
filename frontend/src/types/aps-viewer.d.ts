@@ -36,6 +36,9 @@ declare namespace Autodesk {
         event: string,
         callback: (e: CameraChangedEvent) => void,
       ): void;
+      resize(): void;
+      fitToView(dbIds?: number[], model?: Model, immediate?: boolean): void;
+      navigation: Navigation;
       worldToClient(point: THREE.Vector3): THREE.Vector3;
       getProperties(
         dbId: number,
@@ -63,6 +66,10 @@ declare namespace Autodesk {
 
     interface CameraChangedEvent {
       type: string;
+    }
+
+    interface Navigation {
+      setView(position: THREE.Vector3, target: THREE.Vector3): void;
     }
 
     const CAMERA_CHANGE_EVENT: string;
@@ -97,6 +104,8 @@ declare namespace THREE {
     x: number;
     y: number;
     z: number;
+    clone(): Vector3;
+    add(v: Vector3): Vector3;
   }
 
   class Camera {}

@@ -21,6 +21,7 @@ interface IssueFormPanelProps {
   onDeletePhoto?: (photoId: string) => void;
   onPhotoClick?: (index: number) => void;
   isDeletePending?: boolean;
+  rightClass?: string;
 }
 
 export type { IssueFormValues };
@@ -39,6 +40,7 @@ export function IssueFormPanel({
   onDeletePhoto,
   onPhotoClick,
   isDeletePending = false,
+  rightClass = "right-0",
 }: IssueFormPanelProps) {
   const { form, photoPhase, setPhotoPhase } = useIssueForm(
     isOpen,
@@ -54,8 +56,8 @@ export function IssueFormPanel({
 
   return (
     <div
-      className={`fixed top-14 right-0 bottom-0 w-80 bg-white border-l border-zinc-200 shadow-xl z-30 transition-transform duration-300 ${
-        isOpen ? "translate-x-0" : "translate-x-full"
+      className={`fixed top-14 bottom-0 w-80 bg-white border-l border-zinc-200 shadow-xl z-30 transition-all duration-300 ${
+        isOpen ? `${rightClass} translate-x-0` : "right-0 translate-x-full"
       }`}
     >
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col h-full">

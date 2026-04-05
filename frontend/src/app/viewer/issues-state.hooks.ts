@@ -6,7 +6,7 @@ import {
   type IssueListItem,
   issueRepository,
 } from "@/repositories/issue-repository";
-import type { IssuePin, IssueStatus } from "./types";
+import type { IssueCategory, IssuePin, IssueStatus } from "./types";
 
 const ISSUES_QUERY_KEY = ["issues"] as const;
 
@@ -26,6 +26,16 @@ export function useIssues(projectId: string) {
     queryKey: [...ISSUES_QUERY_KEY, projectId],
     queryFn: () => issueRepository.getIssues({ projectId }),
     select: (data) => data.map(toIssuePin),
+  });
+}
+
+export function useIssueList(
+  projectId: string,
+  filters?: { status?: IssueStatus; category?: IssueCategory },
+) {
+  return useQuery({
+    queryKey: [...ISSUES_QUERY_KEY, projectId, filters],
+    queryFn: () => issueRepository.getIssues({ projectId, ...filters }),
   });
 }
 
