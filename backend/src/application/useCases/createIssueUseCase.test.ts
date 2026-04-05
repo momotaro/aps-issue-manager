@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import type { IssueRepository } from "../../domain/repositories/issueRepository.js";
-import type { ProjectId, UserId } from "../../domain/valueObjects/brandedId.js";
+import {
+  generateId,
+  type IssueId,
+  type ProjectId,
+  type UserId,
+} from "../../domain/valueObjects/brandedId.js";
 import { createSpatialPosition } from "../../domain/valueObjects/position.js";
 import type { CreateIssueInput } from "./createIssueUseCase.js";
 import { createIssueUseCase } from "./createIssueUseCase.js";
@@ -20,14 +25,15 @@ const mockIssueRepo = (
   ...overrides,
 });
 
-const validInput: CreateIssueInput = {
+const makeValidInput = (): CreateIssueInput => ({
+  issueId: generateId<IssueId>(),
   projectId: "project-1" as ProjectId,
   title: "外壁タイルの浮き",
   description: "北側外壁3階部分にタイルの浮きを確認",
   category: "quality_defect",
   position: createSpatialPosition(1.0, 2.0, 3.0),
   reporterId: "user-1" as UserId,
-};
+});
 
 // ---------------------------------------------------------------------------
 // テスト
@@ -39,7 +45,7 @@ describe("createIssueUseCase", () => {
       const repo = mockIssueRepo();
       const useCase = createIssueUseCase(repo);
 
-      const result = await useCase(validInput);
+      const result = await useCase(makeValidInput());
 
       expect(result.ok).toBe(true);
       if (!result.ok) return;
@@ -54,7 +60,7 @@ describe("createIssueUseCase", () => {
       const repo = mockIssueRepo();
       const useCase = createIssueUseCase(repo);
 
-      const result = await useCase(validInput);
+      const result = await useCase(makeValidInput());
       if (!result.ok) return;
 
       expect(repo.save).toHaveBeenCalledWith(
@@ -69,7 +75,7 @@ describe("createIssueUseCase", () => {
       const useCase = createIssueUseCase(repo);
 
       const result = await useCase({
-        ...validInput,
+        ...makeValidInput(),
         assigneeId: "user-2" as UserId,
       });
 
@@ -82,7 +88,7 @@ describe("createIssueUseCase", () => {
       const repo = mockIssueRepo();
       const useCase = createIssueUseCase(repo);
 
-      const result = await useCase(validInput);
+      const result = await useCase(makeValidInput());
 
       expect(result.ok).toBe(true);
       if (!result.ok) return;
@@ -93,7 +99,7 @@ describe("createIssueUseCase", () => {
       const repo = mockIssueRepo();
       const useCase = createIssueUseCase(repo);
 
-      const result = await useCase(validInput);
+      const result = await useCase(makeValidInput());
 
       expect(result.ok).toBe(true);
       if (!result.ok) return;
@@ -106,7 +112,7 @@ describe("createIssueUseCase", () => {
       const repo = mockIssueRepo();
       const useCase = createIssueUseCase(repo);
 
-      const result = await useCase({ ...validInput, title: "" });
+      const result = await useCase({ ...makeValidInput(), title: "" });
 
       expect(result.ok).toBe(false);
       if (result.ok) return;
@@ -118,7 +124,7 @@ describe("createIssueUseCase", () => {
       const repo = mockIssueRepo();
       const useCase = createIssueUseCase(repo);
 
-      const result = await useCase({ ...validInput, title: "   " });
+      const result = await useCase({ ...makeValidInput(), title: "   " });
 
       expect(result.ok).toBe(false);
       if (result.ok) return;
@@ -131,7 +137,7 @@ describe("createIssueUseCase", () => {
       });
       const useCase = createIssueUseCase(repo);
 
-      const result = await useCase(validInput);
+      const result = await useCase(makeValidInput());
 
       expect(result.ok).toBe(false);
       if (result.ok) return;

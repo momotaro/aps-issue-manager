@@ -12,6 +12,7 @@ const safeFileNameSchema = z
   });
 
 export const createIssueBodySchema = z.object({
+  issueId: base62IdSchema,
   projectId: base62IdSchema,
   title: z.string().trim().min(1).max(200),
   description: z.string().max(10000),

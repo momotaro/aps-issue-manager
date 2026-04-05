@@ -10,7 +10,10 @@ import type { IssueId } from "../../domain/valueObjects/brandedId.js";
 import { parseId } from "../../domain/valueObjects/brandedId.js";
 import type { IssueCategory } from "../../domain/valueObjects/issueCategory.js";
 import type { IssueStatus } from "../../domain/valueObjects/issueStatus.js";
-import type { Photo } from "../../domain/valueObjects/photo.js";
+import {
+  confirmedBlobPath,
+  type Photo,
+} from "../../domain/valueObjects/photo.js";
 import type { Position } from "../../domain/valueObjects/position.js";
 import { toDomain } from "./eventStoreImpl.js";
 import { issueEvents, issuesRead, users } from "./schema.js";
@@ -130,6 +133,24 @@ const toListItem = (
   updatedAt: row.updatedAt,
 });
 
+/** 旧データ互換のため、legacy な pending/ パスを confirmed/ パスへ正規化する。 */
+const normalizeStoragePath = (photo: Record<string, unknown>): string => {
+  const path = photo.storagePath;
+  if (typeof path !== "string") return String(path ?? "");
+  if (!path.startsWith("pending/")) return path;
+  // pending/{issueId}/{photoId}.{ext} → confirmed/{issueId}/{phase}/{photoId}.{ext}
+  const parts = path.split("/"); // ["pending", issueId, "photoId.ext"]
+  if (parts.length < 3) return path;
+  const issueId = parts[1];
+  const fileName = parts[2]; // "photoId.ext"
+  if (!issueId || !fileName) return path;
+  const phase = photo.phase;
+  if (phase !== "before" && phase !== "after") return path;
+  const photoId = fileName.split(".")[0];
+  const ext = fileName.split(".").pop() ?? "";
+  return confirmedBlobPath(issueId, phase, photoId, ext);
+};
+
 const restorePhotoDates = (
   photos: Array<Record<string, unknown>>,
 ): readonly Photo[] =>
@@ -137,6 +158,7 @@ const restorePhotoDates = (
     (p) =>
       ({
         ...p,
+        storagePath: normalizeStoragePath(p),
         uploadedAt:
           typeof p.uploadedAt === "string"
             ? new Date(p.uploadedAt)

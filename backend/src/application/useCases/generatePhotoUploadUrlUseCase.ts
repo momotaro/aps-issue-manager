@@ -6,7 +6,6 @@
  * フロントエンドはこの URL を使って MinIO に直接アップロードする。
  */
 
-import type { IssueRepository } from "../../domain/repositories/issueRepository.js";
 import type { BlobStorage } from "../../domain/services/blobStorage.js";
 import {
   generateId,
@@ -36,24 +35,14 @@ export type GeneratePhotoUploadUrlOutput = {
 /**
  * 写真アップロード URL 発行ユースケースを生成する高階関数。
  *
- * @param issueRepo - IssueRepository インターフェース
  * @param blobStorage - BlobStorage インターフェース
  * @returns ユースケース関数
  */
 export const generatePhotoUploadUrlUseCase =
-  (issueRepo: IssueRepository, blobStorage: BlobStorage) =>
+  (blobStorage: BlobStorage) =>
   async (
     input: GeneratePhotoUploadUrlInput,
   ): Promise<Result<GeneratePhotoUploadUrlOutput, DomainErrorDetail>> => {
-    // Issue の存在チェック
-    const issue = await issueRepo.load(input.issueId);
-    if (!issue) {
-      return err({
-        code: "ISSUE_NOT_FOUND",
-        message: `Issue not found: ${input.issueId}`,
-      });
-    }
-
     const photoId = generateId<PhotoId>();
 
     try {

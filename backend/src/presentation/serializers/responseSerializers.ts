@@ -45,6 +45,7 @@ export const serializeIssueDetail = (detail: IssueDetail) => ({
   photos: detail.photos.map((p) => ({
     id: uuidToBase62(p.id),
     fileName: p.fileName,
+    storagePath: p.storagePath,
     phase: p.phase,
     uploadedAt: p.uploadedAt.toISOString(),
   })),

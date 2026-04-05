@@ -3,6 +3,9 @@ dist/
 .next/
 .pnpm-store/
 coverage/
+.playwright-mcp/
+.claude/plans/
+.claude/worktrees/
 
 .env
 .env.local

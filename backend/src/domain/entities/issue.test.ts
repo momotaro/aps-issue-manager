@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { IssueDomainEvent } from "../events/issueEvents.js";
 import {
   generateId,
+  type IssueId,
   type PhotoId,
   type ProjectId,
   parseId,
@@ -31,7 +32,8 @@ const actorId = parseId<UserId>("01ACTOR000000000000000ACTOR");
 const projectId = parseId<ProjectId>("01PROJ0000000000000000PROJ0");
 const reporterId = parseId<UserId>("01REPORTER00000000000REPORT");
 
-const validParams = {
+const makeValidParams = () => ({
+  issueId: generateId<IssueId>(),
   projectId,
   title: "壁のひび割れ",
   description: "3階東側の壁にひび割れを確認",
@@ -41,11 +43,11 @@ const validParams = {
   assigneeId: null,
   photos: [] as const,
   actorId,
-};
+});
 
 /** createIssue で生成した IssueCreatedEvent を返す */
 const makeCreatedEvent = () => {
-  const result = createIssue(validParams);
+  const result = createIssue(makeValidParams());
   if (!result.ok) throw new Error("createIssue failed");
   return result.value;
 };
@@ -62,7 +64,7 @@ const makeIssue = () => {
 
 describe("createIssue", () => {
   it("有効なパラメータで IssueCreatedEvent を生成する", () => {
-    const result = createIssue(validParams);
+    const result = createIssue(makeValidParams());
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
@@ -74,7 +76,7 @@ describe("createIssue", () => {
   });
 
   it("空のタイトルでエラーを返す", () => {
-    const result = createIssue({ ...validParams, title: "  " });
+    const result = createIssue({ ...makeValidParams(), title: "  " });
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error.code).toBe("EMPTY_TITLE");
@@ -82,7 +84,10 @@ describe("createIssue", () => {
   });
 
   it("タイトルの前後空白をトリムする", () => {
-    const result = createIssue({ ...validParams, title: "  壁のひび割れ  " });
+    const result = createIssue({
+      ...makeValidParams(),
+      title: "  壁のひび割れ  ",
+    });
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.value.payload.title).toBe("壁のひび割れ");

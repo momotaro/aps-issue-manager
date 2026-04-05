@@ -3,6 +3,7 @@ import { applyEvent, createIssue } from "../../domain/entities/issue.js";
 import type { IssueRepository } from "../../domain/repositories/issueRepository.js";
 import type { BlobStorage } from "../../domain/services/blobStorage.js";
 import {
+  generateId,
   type IssueId,
   type PhotoId,
   type ProjectId,
@@ -24,6 +25,7 @@ const reporterId = parseId<UserId>("01REPORTER00000000000REPORT");
 /** テスト用の Issue 状態を生成する（写真なし） */
 const makeIssue = () => {
   const result = createIssue({
+    issueId: generateId<IssueId>(),
     projectId,
     title: "壁のひび割れ",
     description: "3階東側の壁にひび割れを確認",
@@ -41,6 +43,7 @@ const makeIssue = () => {
 /** テスト用の Issue 状態を生成する（写真あり） */
 const makeIssueWithPhotos = () => {
   const result = createIssue({
+    issueId: generateId<IssueId>(),
     projectId,
     title: "壁のひび割れ",
     description: "3階東側の壁にひび割れを確認",
