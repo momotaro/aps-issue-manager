@@ -3,15 +3,17 @@
 import { useCallback, useRef, useState } from "react";
 import { getPhotoUrl } from "@/lib/photo-url";
 import type { PhotoItem, PhotoPhase } from "@/repositories/issue-repository";
-import type { UploadingPhoto } from "./photo-upload.hooks";
+import type { StagedFile, UploadingPhoto } from "./photo-upload.hooks";
 
 type PhotoUploaderProps = {
   phase: PhotoPhase;
   onPhaseChange: (phase: PhotoPhase) => void;
   onFilesSelected: (files: File[], phase: PhotoPhase) => void;
   uploading: UploadingPhoto[];
+  staged?: StagedFile[];
   photos: PhotoItem[];
   onDeletePhoto: (photoId: string) => void;
+  onRemoveStaged?: (index: number) => void;
   onPhotoClick: (index: number) => void;
   isDeletePending?: boolean;
 };
@@ -21,8 +23,10 @@ export function PhotoUploader({
   onPhaseChange,
   onFilesSelected,
   uploading,
+  staged = [],
   photos,
   onDeletePhoto,
+  onRemoveStaged,
   onPhotoClick,
   isDeletePending = false,
 }: PhotoUploaderProps) {
@@ -30,6 +34,7 @@ export function PhotoUploader({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const currentUploading = uploading.filter((p) => p.phase === phase);
+  const currentStaged = staged.filter((s) => s.phase === phase);
   const currentPhotos = photos.filter((p) => p.phase === phase);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -155,7 +160,9 @@ export function PhotoUploader({
       />
 
       {/* Thumbnails */}
-      {(currentUploading.length > 0 || currentPhotos.length > 0) && (
+      {(currentStaged.length > 0 ||
+        currentUploading.length > 0 ||
+        currentPhotos.length > 0) && (
         <div className="flex gap-2 flex-wrap">
           {currentPhotos.map((photo, idx) => (
             <PhotoThumbnail
@@ -167,6 +174,19 @@ export function PhotoUploader({
               isDeletePending={isDeletePending}
             />
           ))}
+          {currentStaged.map((s) => {
+            const globalIndex = staged.indexOf(s);
+            return (
+              <PhotoThumbnail
+                key={s.previewUrl}
+                src={s.previewUrl}
+                fileName={s.file.name}
+                onDelete={() => onRemoveStaged?.(globalIndex)}
+                onClick={() => {}}
+                isDeletePending={false}
+              />
+            );
+          })}
           {currentUploading.map((photo) => (
             <UploadingThumbnail
               key={photo.localId}

@@ -62,6 +62,8 @@ const validatePendingPath = (issueId: string, photo: Photo): void => {
 
 export type BlobStorageConfig = {
   endpoint: string;
+  /** ブラウザからアクセス可能な公開エンドポイント。Presigned URL のホスト名を差し替える。未指定時は endpoint をそのまま使用。 */
+  publicEndpoint?: string;
   region: string;
   bucket: string;
   accessKeyId: string;
@@ -71,15 +73,19 @@ export type BlobStorageConfig = {
 
 /** BlobStorage を生成する高階関数。 */
 export const createBlobStorage = (config: BlobStorageConfig): BlobStorage => {
-  const client = new S3Client({
-    endpoint: config.endpoint,
+  const s3Options = {
     region: config.region,
     credentials: {
       accessKeyId: config.accessKeyId,
       secretAccessKey: config.secretAccessKey,
     },
     forcePathStyle: config.forcePathStyle ?? true,
-  });
+  };
+  const client = new S3Client({ ...s3Options, endpoint: config.endpoint });
+  // Presigned URL 用クライアント: ブラウザからアクセス可能なエンドポイントで署名する
+  const presignClient = config.publicEndpoint
+    ? new S3Client({ ...s3Options, endpoint: config.publicEndpoint })
+    : client;
   const bucket = config.bucket;
 
   return {
@@ -183,7 +189,9 @@ export const createBlobStorage = (config: BlobStorageConfig): BlobStorage => {
 
       const key = pendingBlobPath(issueId, photoId, ext);
       const command = new PutObjectCommand({ Bucket: bucket, Key: key });
-      const uploadUrl = await getSignedUrl(client, command, { expiresIn: 600 });
+      const uploadUrl = await getSignedUrl(presignClient, command, {
+        expiresIn: 600,
+      });
 
       return { uploadUrl };
     },

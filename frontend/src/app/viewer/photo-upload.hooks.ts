@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { PhotoPhase } from "@/repositories/issue-repository";
 import { issueRepository } from "@/repositories/issue-repository";
 
@@ -12,6 +12,12 @@ export type UploadingPhoto = {
   fileName: string;
   phase: PhotoPhase;
   progress: number;
+  previewUrl: string;
+};
+
+export type StagedFile = {
+  file: File;
+  phase: PhotoPhase;
   previewUrl: string;
 };
 
@@ -75,56 +81,34 @@ function uploadToPresignedUrl(
 
 export function usePhotoUpload(issueId: string | null, actorId: string) {
   const [uploading, setUploading] = useState<UploadingPhoto[]>([]);
+  const [staged, setStaged] = useState<StagedFile[]>([]);
   const [errors, setErrors] = useState<FileValidationError[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
   const uploadingRef = useRef(uploading);
   uploadingRef.current = uploading;
   const queryClient = useQueryClient();
 
-  const uploadFiles = useCallback(
-    async (files: File[], phase: PhotoPhase) => {
-      if (!issueId) return;
-
-      const validationErrors: FileValidationError[] = [];
-      const validFiles: File[] = [];
-
-      for (const file of files) {
-        const error = validateFile(file);
-        if (error) {
-          validationErrors.push(error);
-        } else {
-          validFiles.push(file);
-        }
-      }
-
-      if (validationErrors.length > 0) {
-        setErrors((prev) => [...prev, ...validationErrors]);
-      }
-
+  const doUpload = useCallback(
+    async (targetIssueId: string, files: File[], phase: PhotoPhase) => {
       abortControllerRef.current?.abort();
       const controller = new AbortController();
       abortControllerRef.current = controller;
 
-      for (const file of validFiles) {
+      for (const file of files) {
         const localId = crypto.randomUUID();
         const previewUrl = URL.createObjectURL(file);
 
-        const uploadingPhoto: UploadingPhoto = {
-          localId,
-          fileName: file.name,
-          phase,
-          progress: 0,
-          previewUrl,
-        };
-
-        setUploading((prev) => [...prev, uploadingPhoto]);
+        setUploading((prev) => [
+          ...prev,
+          { localId, fileName: file.name, phase, progress: 0, previewUrl },
+        ]);
 
         try {
           if (controller.signal.aborted) break;
 
           const { photoId, uploadUrl } =
             await issueRepository.generatePhotoUploadUrl(
-              issueId,
+              targetIssueId,
               file.name,
               phase,
             );
@@ -143,7 +127,7 @@ export function usePhotoUpload(issueId: string | null, actorId: string) {
           );
 
           await issueRepository.confirmPhotoUpload(
-            issueId,
+            targetIssueId,
             photoId,
             file.name,
             phase,
@@ -154,7 +138,7 @@ export function usePhotoUpload(issueId: string | null, actorId: string) {
           URL.revokeObjectURL(previewUrl);
 
           queryClient.invalidateQueries({
-            queryKey: ISSUE_DETAIL_KEY(issueId),
+            queryKey: ISSUE_DETAIL_KEY(targetIssueId),
           });
           queryClient.invalidateQueries({ queryKey: ["issues"] });
         } catch (error) {
@@ -171,8 +155,74 @@ export function usePhotoUpload(issueId: string | null, actorId: string) {
         }
       }
     },
-    [issueId, actorId, queryClient],
+    [actorId, queryClient],
   );
+
+  // Stage files locally or upload immediately
+  const addFiles = useCallback(
+    (files: File[], phase: PhotoPhase) => {
+      const validationErrors: FileValidationError[] = [];
+      const validFiles: File[] = [];
+
+      for (const file of files) {
+        const error = validateFile(file);
+        if (error) {
+          validationErrors.push(error);
+        } else {
+          validFiles.push(file);
+        }
+      }
+
+      if (validationErrors.length > 0) {
+        setErrors((prev) => [...prev, ...validationErrors]);
+      }
+
+      if (!issueId) {
+        // Stage locally — upload after issue creation
+        setStaged((prev) => [
+          ...prev,
+          ...validFiles.map((file) => ({
+            file,
+            phase,
+            previewUrl: URL.createObjectURL(file),
+          })),
+        ]);
+        return;
+      }
+
+      doUpload(issueId, validFiles, phase);
+    },
+    [issueId, doUpload],
+  );
+
+  // Remove a staged file
+  const removeStaged = useCallback((index: number) => {
+    setStaged((prev) => {
+      const removed = prev[index];
+      if (removed) URL.revokeObjectURL(removed.previewUrl);
+      return prev.filter((_, i) => i !== index);
+    });
+  }, []);
+
+  // Auto-upload staged files when issueId becomes available
+  const prevIssueIdRef = useRef(issueId);
+  useEffect(() => {
+    if (issueId && !prevIssueIdRef.current && staged.length > 0) {
+      // Group staged files by phase
+      const byPhase = new Map<PhotoPhase, File[]>();
+      for (const s of staged) {
+        const list = byPhase.get(s.phase) ?? [];
+        list.push(s.file);
+        byPhase.set(s.phase, list);
+        URL.revokeObjectURL(s.previewUrl);
+      }
+      setStaged([]);
+      for (const [phase, files] of byPhase) {
+        doUpload(issueId, files, phase);
+      }
+    }
+    prevIssueIdRef.current = issueId;
+  }, [issueId, staged, doUpload]);
 
   const clearErrors = useCallback(() => setErrors([]), []);
 
@@ -181,11 +231,23 @@ export function usePhotoUpload(issueId: string | null, actorId: string) {
     for (const photo of uploadingRef.current) {
       URL.revokeObjectURL(photo.previewUrl);
     }
+    for (const s of staged) {
+      URL.revokeObjectURL(s.previewUrl);
+    }
     setUploading([]);
+    setStaged([]);
     setErrors([]);
-  }, []);
+  }, [staged]);
 
-  return { uploading, errors, uploadFiles, clearErrors, cleanup };
+  return {
+    uploading,
+    staged,
+    errors,
+    addFiles,
+    removeStaged,
+    clearErrors,
+    cleanup,
+  };
 }
 
 export function useDeletePhoto(issueId: string | null) {

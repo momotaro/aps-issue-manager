@@ -63,7 +63,9 @@ export default function ViewerPage() {
   const { data: issueDetail } = useIssueDetail(activeIssueId);
   const {
     uploading,
-    uploadFiles,
+    staged,
+    addFiles,
+    removeStaged,
     cleanup: cleanupUploads,
   } = usePhotoUpload(activeIssueId, TEMP_REPORTER_ID);
   const deletePhoto = useDeletePhoto(activeIssueId);
@@ -193,8 +195,10 @@ export default function ViewerPage() {
         isSubmitting={createIssue.isPending}
         photos={photos}
         uploading={uploading}
-        onFilesSelected={uploadFiles}
+        staged={staged}
+        onFilesSelected={addFiles}
         onDeletePhoto={handleDeletePhoto}
+        onRemoveStaged={removeStaged}
         onPhotoClick={openLightbox}
         isDeletePending={deletePhoto.isPending}
       />

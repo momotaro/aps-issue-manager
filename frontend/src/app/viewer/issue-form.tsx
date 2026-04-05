@@ -3,7 +3,7 @@
 import type { PhotoItem, PhotoPhase } from "@/repositories/issue-repository";
 import type { IssueFormValues } from "./issue-form.hooks";
 import { useIssueForm } from "./issue-form.hooks";
-import type { UploadingPhoto } from "./photo-upload.hooks";
+import type { StagedFile, UploadingPhoto } from "./photo-upload.hooks";
 import { PhotoUploader } from "./photo-uploader";
 import { CATEGORY_LABELS, type IssueCategory } from "./types";
 
@@ -15,8 +15,10 @@ interface IssueFormPanelProps {
   isSubmitting?: boolean;
   photos?: PhotoItem[];
   uploading?: UploadingPhoto[];
+  staged?: StagedFile[];
   onFilesSelected?: (files: File[], phase: PhotoPhase) => void;
   onDeletePhoto?: (photoId: string) => void;
+  onRemoveStaged?: (index: number) => void;
   onPhotoClick?: (index: number) => void;
   isDeletePending?: boolean;
 }
@@ -31,8 +33,10 @@ export function IssueFormPanel({
   isSubmitting = false,
   photos = [],
   uploading = [],
+  staged = [],
   onFilesSelected,
   onDeletePhoto,
+  onRemoveStaged,
   onPhotoClick,
   isDeletePending = false,
 }: IssueFormPanelProps) {
@@ -152,8 +156,10 @@ export function IssueFormPanel({
               onPhaseChange={setPhotoPhase}
               onFilesSelected={onFilesSelected}
               uploading={uploading}
+              staged={staged}
               photos={photos}
               onDeletePhoto={onDeletePhoto}
+              onRemoveStaged={onRemoveStaged}
               onPhotoClick={onPhotoClick}
               isDeletePending={isDeletePending}
             />

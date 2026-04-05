@@ -30,6 +30,7 @@ services:
       - ./backend/.env
     environment:
       - CI=true
+      - MINIO_PUBLIC_ENDPOINT=localhost
     depends_on:
       db:
         condition: service_healthy

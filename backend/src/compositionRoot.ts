@@ -25,8 +25,13 @@ const requireEnv = (name: string): string => {
 const minioHost = requireEnv("MINIO_ENDPOINT");
 const minioPort = requireEnv("MINIO_PORT");
 
+const minioPublicHost = process.env.MINIO_PUBLIC_ENDPOINT;
+
 const blobConfig: BlobStorageConfig = {
   endpoint: `http://${minioHost}:${minioPort}`,
+  publicEndpoint: minioPublicHost
+    ? `http://${minioPublicHost}:${minioPort}`
+    : undefined,
   region: process.env.MINIO_REGION ?? "us-east-1",
   bucket: requireEnv("MINIO_BUCKET"),
   accessKeyId: requireEnv("MINIO_ACCESS_KEY"),
