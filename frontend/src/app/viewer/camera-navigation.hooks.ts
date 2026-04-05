@@ -10,7 +10,7 @@ export function useCameraNavigation(
     (issue: IssueListItem) => {
       if (!viewer || typeof THREE === "undefined") return;
       const pos = issue.position;
-      if (pos.type === "component" && pos.dbId) {
+      if (pos.type === "component" && pos.dbId != null) {
         viewer.fitToView([pos.dbId]);
       } else {
         const target = new THREE.Vector3(

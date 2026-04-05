@@ -29,6 +29,7 @@ export function IssueFilter({
             e.target.value ? (e.target.value as IssueStatus) : undefined,
           )
         }
+        aria-label="ステータスで絞り込み"
         className="h-[30px] rounded-md border border-zinc-200 px-2.5 text-[11px] text-zinc-400 bg-white"
       >
         <option value="">ステータス</option>
@@ -47,6 +48,7 @@ export function IssueFilter({
             e.target.value ? (e.target.value as IssueCategory) : undefined,
           )
         }
+        aria-label="種別で絞り込み"
         className="h-[30px] rounded-md border border-zinc-200 px-2.5 text-[11px] text-zinc-400 bg-white"
       >
         <option value="">種別</option>

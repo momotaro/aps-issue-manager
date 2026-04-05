@@ -14,11 +14,12 @@ describe("useIssueFilters", () => {
     expect(result.current.filters.status).toBe("open");
   });
 
-  it("ステータスフィルタを解除できる", () => {
+  it("ステータスフィルタを解除するとキーが削除される", () => {
     const { result } = renderHook(() => useIssueFilters());
     act(() => result.current.setStatus("open"));
     act(() => result.current.setStatus(undefined));
-    expect(result.current.filters.status).toBeUndefined();
+    expect(result.current.filters).toEqual({});
+    expect("status" in result.current.filters).toBe(false);
   });
 
   it("種別フィルタを設定できる", () => {
@@ -27,11 +28,12 @@ describe("useIssueFilters", () => {
     expect(result.current.filters.category).toBe("safety_hazard");
   });
 
-  it("種別フィルタを解除できる", () => {
+  it("種別フィルタを解除するとキーが削除される", () => {
     const { result } = renderHook(() => useIssueFilters());
     act(() => result.current.setCategory("safety_hazard"));
     act(() => result.current.setCategory(undefined));
-    expect(result.current.filters.category).toBeUndefined();
+    expect(result.current.filters).toEqual({});
+    expect("category" in result.current.filters).toBe(false);
   });
 
   it("複合フィルタを設定できる", () => {
