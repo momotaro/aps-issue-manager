@@ -55,7 +55,6 @@ const createMockIssueRepo = (
 const createMockBlobStorage = (
   overrides?: Partial<BlobStorage>,
 ): BlobStorage => ({
-  uploadPending: vi.fn(),
   generateUploadUrl: vi.fn().mockResolvedValue({ uploadUrl: "http://test" }),
   confirmPending: vi
     .fn()
@@ -110,7 +109,7 @@ describe("confirmPhotoUploadUseCase", () => {
       ]),
     );
 
-    // save が PhotoAdded イベントで呼ばれ、confirmed パスが記録される
+    // PhotoAdded イベントには confirmed パスが記録される
     expect(issueRepo.save).toHaveBeenCalledWith(
       issueId,
       [

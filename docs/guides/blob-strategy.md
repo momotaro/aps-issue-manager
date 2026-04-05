@@ -9,15 +9,28 @@
 DBにはメタデータ（ファイル名、パス、サイズ等）のみ保持し、
 実ファイルはBlobストレージに分離する。
 
-## 2. アップロードフロー
+## 2. アップロードフロー（Presigned URL 方式）
 
 ```
-1. Frontend → Backend: アップロードリクエスト
-2. Backend: pending/ prefix で MinIO にファイル保存
-3. Backend: DB にメタデータ + Issue との紐付けを保存
-4. Backend: MinIO のファイルを confirmed/ prefix に移動（CopyObject + Delete）
-5. Backend → Frontend: 完了レスポンス
+1. Frontend → Backend: POST /api/issues/:id/photos/upload-url（fileName, phase を送信）
+2. Backend: photoId 生成 → pending/{issueId}/{photoId}.{ext} への Presigned PUT URL を発行 → 返却
+3. Frontend → MinIO: Presigned PUT URL でファイルを直接アップロード
+4. Frontend → Backend: POST /api/issues/:id/photos/confirm（photoId, fileName, phase を送信）
+5. Backend: DB にイベント（PhotoAdded）を永続化
+6. Backend: MinIO のファイルを confirmed/{issueId}/{phase}/{photoId}.{ext} に移動（CopyObject + Delete）
+7. Backend → Frontend: 完了レスポンス
 ```
+
+### Presigned URL 方式の利点
+
+- ファイルデータがバックエンドを経由しない → バックエンドの負荷軽減
+- 大容量ファイルでもバックエンドのメモリを消費しない
+- フロントエンドから MinIO に直接 PUT するため、アップロード速度が向上
+
+### Presigned URL の有効期限
+
+- 10分（600秒）— minio-cleanup の TTL と一致させている
+- 期限切れ後にアップロードされなかったケースは minio-cleanup が自動回収
 
 ## 3. DBとBlobの整合性戦略
 
@@ -50,3 +63,22 @@ mc find local/issues/pending/ --older-than 10m --exec 'mc rm {}'
 - MinIO Lifecycle Policy（1日単位）に切り替え、cleanup コンテナを廃止
 - または Outbox パターンでトランザクション保証を追加
 - S3 への移行時も同じ prefix 戦略が適用可能
+
+## 4. 実装詳細
+
+### パッケージ
+
+- `minio` npm パッケージを使用（MinIO 公式クライアント）
+- `presignedPutObject` で Presigned URL を生成
+- `copyObject` + `removeObject` で pending → confirmed 移動
+- `listObjects` + `removeObjects` で一括削除
+
+### DI パターン
+
+```typescript
+// minioClient.ts — クライアント生成
+const client = createMinioClient(config);
+
+// blobStorageImpl.ts — BlobStorage 実装
+const blobStorage = createBlobStorage(client, bucket);
+```

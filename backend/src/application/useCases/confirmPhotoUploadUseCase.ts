@@ -67,23 +67,35 @@ export const confirmPhotoUploadUseCase =
       });
     }
 
-    // confirmed パスで Photo を作成（イベントには最終パスを記録する）
+    // confirmed パスは確定的に計算できるため、イベントに最終パスを記録する
+    const pendingPath = pendingBlobPath(input.issueId, input.photoId, ext);
     const confirmedPath = confirmedBlobPath(
       input.issueId,
       input.phase,
       input.photoId,
       ext,
     );
-    const photo = createPhoto({
+
+    // Blob 操作用（pending パス）
+    const pendingPhoto = createPhoto({
       id: input.photoId,
       fileName: input.fileName,
-      storagePath: confirmedPath,
+      storagePath: pendingPath,
       phase: input.phase,
       uploadedAt: new Date(),
     });
 
+    // イベント記録用（confirmed パス）
+    const confirmedPhoto = createPhoto({
+      id: input.photoId,
+      fileName: input.fileName,
+      storagePath: confirmedPath,
+      phase: input.phase,
+      uploadedAt: pendingPhoto.uploadedAt,
+    });
+
     // PhotoAdded イベントを生成（confirmed パスで記録）
-    const eventResult = addPhoto(issue, photo, input.actorId);
+    const eventResult = addPhoto(issue, confirmedPhoto, input.actorId);
     if (!eventResult.ok) return eventResult;
 
     // イベントを先に永続化（データ整合性優先）
@@ -99,11 +111,7 @@ export const confirmPhotoUploadUseCase =
       });
     }
 
-    // pending → confirmed に移動（blob 操作には pending パスが必要）
-    const pendingPhoto = createPhoto({
-      ...photo,
-      storagePath: pendingBlobPath(input.issueId, input.photoId, ext),
-    });
+    // pending → confirmed に移動（Blob 操作は pending パスで実行）
     try {
       await blobStorage.confirmPending(input.issueId, [pendingPhoto]);
     } catch (error) {

@@ -63,7 +63,6 @@ const createMockIssueRepo = (
 const createMockBlobStorage = (
   overrides?: Partial<BlobStorage>,
 ): BlobStorage => ({
-  uploadPending: vi.fn(),
   generateUploadUrl: vi.fn().mockResolvedValue({ uploadUrl: "http://test" }),
   confirmPending: vi.fn(),
   deletePhoto: vi.fn().mockResolvedValue(undefined),

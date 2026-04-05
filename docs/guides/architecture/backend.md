@@ -27,7 +27,10 @@ type IssueRepository = {
 
 // domain/services/blobStorage.ts
 type BlobStorage = {
-    confirmPending: (issueId: string, photos: Photo[]) => Promise<void>;
+    generateUploadUrl: (issueId: string, photoId: string, fileName: string, phase: PhotoPhase) => Promise<{ uploadUrl: string }>;
+    confirmPending: (issueId: string, photos: Photo[]) => Promise<readonly Photo[]>;
+    deleteByIssue: (issueId: string) => Promise<void>;
+    deletePhoto: (storagePath: string) => Promise<void>;
 };
 
 // application/useCases/issueUseCases.ts
@@ -71,7 +74,7 @@ const createIssueRepository = (db: Database): IssueRepository => ({
 // compositionRoot.ts — 依存の組み立てを一箇所に集約
 const db = createDatabase(process.env.DATABASE_URL);
 const issueRepo = createIssueRepository(db);
-const blobStorage = createBlobStorage(minioClient);
+const blobStorage = createBlobStorage(minioClient, bucket);
 
 export const issueUseCases = initIssueUseCases(issueRepo, blobStorage);
 

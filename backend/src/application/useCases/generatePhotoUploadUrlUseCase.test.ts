@@ -16,7 +16,6 @@ const issueId = parseId<IssueId>("019560a0-0000-7000-8000-000000000001");
 const createMockBlobStorage = (
   overrides?: Partial<BlobStorage>,
 ): BlobStorage => ({
-  uploadPending: vi.fn(),
   generateUploadUrl: vi.fn().mockResolvedValue({
     uploadUrl: "https://minio.example.com/presigned-url",
   }),
