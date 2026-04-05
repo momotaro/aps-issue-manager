@@ -35,7 +35,6 @@ const mockBlobStorage = {
   confirmPending: vi.fn(),
   deletePhoto: vi.fn(),
   deleteByIssue: vi.fn(),
-  uploadPending: vi.fn(),
 };
 
 vi.mock("../../compositionRoot.js", () => ({
