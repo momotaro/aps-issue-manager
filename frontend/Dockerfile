@@ -1,5 +1,5 @@
 FROM node:22-alpine
 RUN corepack enable && corepack prepare pnpm@latest --activate
-WORKDIR /workspace/frontend
+WORKDIR /workspace
 EXPOSE 3000
-CMD ["sh", "-c", "pnpm install --store-dir /tmp/.pnpm-store --frozen-lockfile && pnpm dev"]
+CMD ["sh", "-c", "pnpm install --store-dir /tmp/.pnpm-store --frozen-lockfile && pnpm --filter frontend dev"]
