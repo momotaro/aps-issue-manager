@@ -13,8 +13,6 @@ interface IssueFormPanelProps {
   onSubmit: (data: IssueFormValues) => void;
   onCancel: () => void;
   isSubmitting?: boolean;
-  // Photo props (optional — only shown when issueId is available)
-  issueId?: string | null;
   photos?: PhotoItem[];
   uploading?: UploadingPhoto[];
   onFilesSelected?: (files: File[], phase: PhotoPhase) => void;
@@ -31,7 +29,6 @@ export function IssueFormPanel({
   onSubmit,
   onCancel,
   isSubmitting = false,
-  issueId,
   photos = [],
   uploading = [],
   onFilesSelected,
@@ -49,8 +46,7 @@ export function IssueFormPanel({
     formState: { errors },
   } = form;
 
-  const showPhotoSection =
-    issueId && onFilesSelected && onDeletePhoto && onPhotoClick;
+  const showPhotoSection = onFilesSelected && onDeletePhoto && onPhotoClick;
 
   return (
     <div

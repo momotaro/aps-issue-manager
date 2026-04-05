@@ -191,7 +191,6 @@ export default function ViewerPage() {
         onSubmit={handleFormSubmit}
         onCancel={handleFormCancel}
         isSubmitting={createIssue.isPending}
-        issueId={createdIssueIdRef.current}
         photos={photos}
         uploading={uploading}
         onFilesSelected={uploadFiles}
