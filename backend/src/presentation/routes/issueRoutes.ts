@@ -86,9 +86,15 @@ export const issueRoutes = new Hono()
       ...(query.assigneeId && {
         assigneeId: parseId<UserId>(base62ToUuid(query.assigneeId)),
       }),
+      ...(query.q && { keyword: query.q }),
+    };
+    const options = {
+      ...(query.sortBy && { sortBy: query.sortBy }),
+      ...(query.sortOrder && { sortOrder: query.sortOrder }),
     };
     const result = await getIssues(
       Object.keys(filters).length > 0 ? filters : undefined,
+      Object.keys(options).length > 0 ? options : undefined,
     );
     if (!result.ok)
       return c.json(

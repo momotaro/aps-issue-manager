@@ -19,29 +19,33 @@ export function useIssuePins(
   const rafRef = useRef<number>(0);
 
   const updatePositions = useCallback(() => {
-    if (!viewer) return;
+    if (!viewer?.container) return;
 
-    const updated = issues.map((pin) => {
-      const worldPt = new THREE.Vector3(
-        pin.worldPosition.x,
-        pin.worldPosition.y,
-        pin.worldPosition.z,
-      );
-      const screenPt = viewer.worldToClient(worldPt);
+    try {
+      const updated = issues.map((pin) => {
+        const worldPt = new THREE.Vector3(
+          pin.worldPosition.x,
+          pin.worldPosition.y,
+          pin.worldPosition.z,
+        );
+        const screenPt = viewer.worldToClient(worldPt);
 
-      const containerRect = viewer.container.getBoundingClientRect();
-      const visible =
-        screenPt.x >= 0 &&
-        screenPt.x <= containerRect.width &&
-        screenPt.y >= 0 &&
-        screenPt.y <= containerRect.height &&
-        screenPt.z >= 0 &&
-        screenPt.z <= 1;
+        const containerRect = viewer.container.getBoundingClientRect();
+        const visible =
+          screenPt.x >= 0 &&
+          screenPt.x <= containerRect.width &&
+          screenPt.y >= 0 &&
+          screenPt.y <= containerRect.height &&
+          screenPt.z >= 0 &&
+          screenPt.z <= 1;
 
-      return { pin, x: screenPt.x, y: screenPt.y, visible };
-    });
+        return { pin, x: screenPt.x, y: screenPt.y, visible };
+      });
 
-    setPositions(updated);
+      setPositions(updated);
+    } catch {
+      // viewer が dispose 済みの場合は無視
+    }
   }, [viewer, issues]);
 
   useEffect(() => {

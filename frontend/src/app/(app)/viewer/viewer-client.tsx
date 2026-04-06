@@ -1,9 +1,11 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef } from "react";
+import { useSharedApsViewer } from "@/components/aps-viewer-provider";
+import { ViewerSlot } from "@/components/viewer-slot";
+import { TEMP_PROJECT_ID, TEMP_REPORTER_ID } from "@/lib/constants";
 import { generateBase62Id } from "@/lib/generate-id";
-import { ApsViewer } from "./aps-viewer";
-import { useApsViewer } from "./aps-viewer.hooks";
 import { useCameraNavigation } from "./camera-navigation.hooks";
 import { useIssueFilters } from "./issue-filters.hooks";
 import { IssueFormPanel } from "./issue-form";
@@ -24,12 +26,11 @@ import {
 import { usePhotoViewer } from "./photo-viewer.hooks";
 import { usePlacementMode } from "./placement-mode.hooks";
 
-// TODO: 認証実装後に動的に取得する
-const TEMP_PROJECT_ID = "0000000000000000000001";
-const TEMP_REPORTER_ID = "0000000000000000000001";
+export function ViewerClient() {
+  const searchParams = useSearchParams();
+  const targetIssueId = searchParams.get("issueId");
 
-export default function ViewerPage() {
-  const { containerRef, viewer, isLoading, error } = useApsViewer();
+  const { viewer, isLoading, error } = useSharedApsViewer();
   const {
     data: issues = [],
     isLoading: issuesLoading,
@@ -114,6 +115,42 @@ export default function ViewerPage() {
   // Camera navigation
   const { navigateToIssue } = useCameraNavigation(viewer);
 
+  // issueId クエリパラメータによるカメラ移動（指摘一覧ページの 3D ボタンから遷移時）
+  const { data: targetIssue } = useIssueDetail(targetIssueId);
+  const hasNavigatedRef = useRef(false);
+  useEffect(() => {
+    if (!targetIssue || !viewer || hasNavigatedRef.current) return;
+
+    const doNavigate = () => {
+      if (hasNavigatedRef.current) return;
+      navigateToIssue(targetIssue);
+      hasNavigatedRef.current = true;
+    };
+
+    // ジオメトリが完全にロードされてからカメラ移動
+    if (viewer.model?.isLoadDone()) {
+      doNavigate();
+    } else {
+      const onGeometryLoaded = () => {
+        doNavigate();
+        viewer.removeEventListener(
+          Autodesk.Viewing.GEOMETRY_LOADED_EVENT,
+          onGeometryLoaded,
+        );
+      };
+      viewer.addEventListener(
+        Autodesk.Viewing.GEOMETRY_LOADED_EVENT,
+        onGeometryLoaded,
+      );
+      return () => {
+        viewer.removeEventListener(
+          Autodesk.Viewing.GEOMETRY_LOADED_EVENT,
+          onGeometryLoaded,
+        );
+      };
+    }
+  }, [targetIssue, viewer, navigateToIssue]);
+
   const handleAddFromList = useCallback(() => {
     enterPlacementMode();
   }, [enterPlacementMode]);
@@ -173,105 +210,62 @@ export default function ViewerPage() {
   const formRightClass = isListOpen ? "right-80" : "right-9";
 
   return (
-    <div className="flex flex-col h-screen">
-      <header className="flex items-center justify-between h-14 px-6 bg-[#0A0A0A] shrink-0">
-        <div className="flex items-center gap-2">
-          <svg
-            className="h-5 w-5 text-white"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-            aria-hidden="true"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M3 10h1l1-2h2l1 2h1m4 0h1l1-2h2l1 2h1M4 10v6a2 2 0 002 2h12a2 2 0 002-2v-6M6 6l2-4h8l2 4"
+    <div className="flex flex-1 overflow-hidden">
+      <main className="flex-1 relative">
+        {/* Persistent な APS Viewer の DOM をここに装着 */}
+        <ViewerSlot />
+        {!combinedLoading && !combinedError && (
+          <>
+            <IssuePinsOverlay
+              positions={positions}
+              selectedPin={selectedPin}
+              onPinClick={isPlacementMode ? () => {} : handlePinClick}
+              onClose={closePopup}
+              onComparePhotos={openComparison}
             />
-          </svg>
-          <span className="text-sm font-semibold text-white">
-            指摘管理ツール
-          </span>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="text-[13px] text-zinc-400">現場A棟</span>
-          <svg
-            className="h-5 w-5 text-zinc-400"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-            aria-hidden="true"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-            />
-          </svg>
-        </div>
-      </header>
-      <div className="flex flex-1 overflow-hidden">
-        <main className="flex-1 relative">
-          <ApsViewer
-            containerRef={containerRef}
-            isLoading={combinedLoading}
-            error={combinedError}
-          />
-          {!combinedLoading && !combinedError && (
-            <>
-              <IssuePinsOverlay
-                positions={positions}
-                selectedPin={selectedPin}
-                onPinClick={isPlacementMode ? () => {} : handlePinClick}
-                onClose={closePopup}
-                onComparePhotos={openComparison}
-              />
-              {pendingPin && (
-                <div className="absolute inset-0 pointer-events-none z-20">
-                  <div
-                    className="absolute -translate-x-1/2 -translate-y-full"
-                    style={{
-                      left: pendingPin.screenPosition.x,
-                      top: pendingPin.screenPosition.y,
-                    }}
-                  >
-                    <PinMarker status="open" />
-                  </div>
+            {pendingPin && (
+              <div className="absolute inset-0 pointer-events-none z-20">
+                <div
+                  className="absolute -translate-x-1/2 -translate-y-full"
+                  style={{
+                    left: pendingPin.screenPosition.x,
+                    top: pendingPin.screenPosition.y,
+                  }}
+                >
+                  <PinMarker status="open" />
                 </div>
-              )}
-            </>
-          )}
-
-          {/* Photo Comparison overlay */}
-          {comparison.isOpen && comparison.issueId && (
-            <div className="absolute bottom-4 left-4 z-30 w-[600px]">
-              <PhotoComparison
-                photos={photos}
-                onClose={closeComparison}
-                onPhotoClick={openLightbox}
-              />
-            </div>
-          )}
-        </main>
-
-        {isListOpen ? (
-          <IssueListPanel
-            issues={issueList}
-            isLoading={issueListLoading}
-            statusFilter={filters.status}
-            categoryFilter={filters.category}
-            onStatusChange={setStatus}
-            onCategoryChange={setCategory}
-            onAddClick={handleAddFromList}
-            onClose={closeList}
-            onCardClick={navigateToIssue}
-          />
-        ) : (
-          <ListToggleBar onOpen={openList} />
+              </div>
+            )}
+          </>
         )}
-      </div>
+
+        {/* Photo Comparison overlay */}
+        {comparison.isOpen && comparison.issueId && (
+          <div className="absolute bottom-4 left-4 z-30 w-[600px]">
+            <PhotoComparison
+              photos={photos}
+              onClose={closeComparison}
+              onPhotoClick={openLightbox}
+            />
+          </div>
+        )}
+      </main>
+
+      {isListOpen ? (
+        <IssueListPanel
+          issues={issueList}
+          isLoading={issueListLoading}
+          statusFilter={filters.status}
+          categoryFilter={filters.category}
+          onStatusChange={setStatus}
+          onCategoryChange={setCategory}
+          onAddClick={handleAddFromList}
+          onClose={closeList}
+          onCardClick={navigateToIssue}
+        />
+      ) : (
+        <ListToggleBar onOpen={openList} />
+      )}
 
       <IssueFormPanel
         isOpen={isFormOpen}

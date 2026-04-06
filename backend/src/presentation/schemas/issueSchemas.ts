@@ -27,6 +27,9 @@ export const issueFiltersQuerySchema = z.object({
   status: z.enum(ISSUE_STATUSES).optional(),
   category: z.enum(ISSUE_CATEGORIES).optional(),
   assigneeId: base62IdSchema.optional(),
+  q: z.string().trim().max(200).optional(),
+  sortBy: z.enum(["createdAt", "updatedAt"]).optional(),
+  sortOrder: z.enum(["asc", "desc"]).optional(),
 });
 
 export const updateTitleBodySchema = z.object({

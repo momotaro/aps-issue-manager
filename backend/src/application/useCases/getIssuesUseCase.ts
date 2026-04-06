@@ -10,6 +10,7 @@ import type {
   IssueFilters,
   IssueListItem,
   IssueQueryService,
+  QueryOptions,
 } from "../../domain/repositories/issueQueryService.js";
 import type {
   DomainErrorDetail,
@@ -21,15 +22,16 @@ import { err } from "../../domain/valueObjects/result.js";
  * 指摘一覧取得ユースケースを生成する。
  *
  * @param queryService - 読み取り側クエリサービス
- * @returns フィルタ条件を受け取り、指摘一覧を返す関数
+ * @returns フィルタ条件とクエリオプションを受け取り、指摘一覧を返す関数
  */
 export const getIssuesUseCase =
   (queryService: IssueQueryService) =>
   async (
     filters?: IssueFilters,
+    options?: QueryOptions,
   ): Promise<Result<readonly IssueListItem[], DomainErrorDetail>> => {
     try {
-      const items = await queryService.findAll(filters);
+      const items = await queryService.findAll(filters, options);
       return { ok: true, value: items };
     } catch (error) {
       return err({

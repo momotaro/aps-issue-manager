@@ -1,10 +1,11 @@
-import { and, asc, desc, eq, inArray, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, or, type SQL } from "drizzle-orm";
 import type { IssueDomainEvent } from "../../domain/events/issueEvents.js";
 import type {
   IssueDetail,
   IssueFilters,
   IssueListItem,
   IssueQueryService,
+  QueryOptions,
 } from "../../domain/repositories/issueQueryService.js";
 import type { IssueId } from "../../domain/valueObjects/brandedId.js";
 import { parseId } from "../../domain/valueObjects/brandedId.js";
@@ -46,6 +47,7 @@ export const createIssueQueryService = (db: Db): IssueQueryService => ({
 
   findAll: async (
     filters?: IssueFilters,
+    options?: QueryOptions,
   ): Promise<readonly IssueListItem[]> => {
     const conditions: SQL[] = [];
 
@@ -61,12 +63,27 @@ export const createIssueQueryService = (db: Db): IssueQueryService => ({
     if (filters?.assigneeId) {
       conditions.push(eq(issuesRead.assigneeId, filters.assigneeId));
     }
+    if (filters?.keyword) {
+      const escaped = filters.keyword.replace(/[\\%_]/g, "\\$&");
+      const pattern = `%${escaped}%`;
+      const keywordCondition = or(
+        ilike(issuesRead.title, pattern),
+        ilike(issuesRead.description, pattern),
+      );
+      if (keywordCondition) conditions.push(keywordCondition);
+    }
+
+    const sortColumn =
+      options?.sortBy === "createdAt"
+        ? issuesRead.createdAt
+        : issuesRead.updatedAt;
+    const sortDirection = options?.sortOrder === "asc" ? asc : desc;
 
     const rows = await db
       .select()
       .from(issuesRead)
       .where(conditions.length > 0 ? and(...conditions) : undefined)
-      .orderBy(desc(issuesRead.updatedAt));
+      .orderBy(sortDirection(sortColumn));
 
     if (rows.length === 0) return [];
 

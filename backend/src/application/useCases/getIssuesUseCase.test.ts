@@ -59,7 +59,7 @@ describe("getIssuesUseCase", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value).toEqual(items);
-    expect(queryService.findAll).toHaveBeenCalledWith(undefined);
+    expect(queryService.findAll).toHaveBeenCalledWith(undefined, undefined);
   });
 
   it("フィルタ付きで一覧を取得できる", async () => {
@@ -77,7 +77,7 @@ describe("getIssuesUseCase", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value).toEqual(items);
-    expect(queryService.findAll).toHaveBeenCalledWith(filters);
+    expect(queryService.findAll).toHaveBeenCalledWith(filters, undefined);
   });
 
   it("該当なしの場合は空配列を返す", async () => {
