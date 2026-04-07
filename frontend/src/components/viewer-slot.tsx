@@ -14,6 +14,8 @@ export function ViewerSlot() {
   const slotRef = useRef<HTMLDivElement>(null);
   const { containerRef, viewer, isLoading, error } = useSharedApsViewer();
 
+  // DOM 移動は mount/unmount のみ。viewer の初期化で再付け替えが起きないよう
+  // viewer は依存配列に含めない。
   useEffect(() => {
     const slot = slotRef.current;
     const container = containerRef.current;
@@ -22,19 +24,17 @@ export function ViewerSlot() {
     const previousParent = container.parentElement;
     slot.appendChild(container);
 
-    // 移動後にビューワーの canvas をリサイズ
-    if (viewer) {
-      const timer = setTimeout(() => viewer.resize(), 50);
-      return () => {
-        clearTimeout(timer);
-        if (previousParent) previousParent.appendChild(container);
-      };
-    }
-
     return () => {
       if (previousParent) previousParent.appendChild(container);
     };
-  }, [containerRef, viewer]);
+  }, [containerRef]);
+
+  // DOM 移動後 / viewer 初期化後に canvas をリサイズ
+  useEffect(() => {
+    if (!viewer) return;
+    const timer = setTimeout(() => viewer.resize(), 50);
+    return () => clearTimeout(timer);
+  }, [viewer]);
 
   return (
     <div ref={slotRef} className="absolute inset-0">

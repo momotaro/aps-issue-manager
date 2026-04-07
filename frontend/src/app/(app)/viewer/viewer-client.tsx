@@ -117,14 +117,16 @@ export function ViewerClient() {
 
   // issueId クエリパラメータによるカメラ移動（指摘一覧ページの 3D ボタンから遷移時）
   const { data: targetIssue } = useIssueDetail(targetIssueId);
-  const hasNavigatedRef = useRef(false);
+  // 最後にナビゲートした issueId を保持し、targetIssueId が変わったら再ナビゲートする
+  const navigatedIssueIdRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!targetIssue || !viewer || hasNavigatedRef.current) return;
+    if (!targetIssue || !viewer) return;
+    if (navigatedIssueIdRef.current === targetIssue.id) return;
 
     const doNavigate = () => {
-      if (hasNavigatedRef.current) return;
+      if (navigatedIssueIdRef.current === targetIssue.id) return;
       navigateToIssue(targetIssue);
-      hasNavigatedRef.current = true;
+      navigatedIssueIdRef.current = targetIssue.id;
     };
 
     // ジオメトリが完全にロードされてからカメラ移動
