@@ -41,23 +41,48 @@ export function useIssueSearch() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  const [keyword, setKeyword] = useState(searchParams.get("q") ?? "");
-  const [debouncedKeyword, setDebouncedKeyword] = useState(keyword);
+  // searchParams から派生した正規化済みの現在値
+  const currentSearch = useMemo(
+    () => ({
+      keyword: searchParams.get("q") ?? "",
+      status: parseStatus(searchParams.get("status")),
+      category: parseCategory(searchParams.get("category")),
+      assigneeId: searchParams.get("assigneeId") || undefined,
+      sortBy: parseSortBy(searchParams.get("sortBy")),
+      sortOrder: parseSortOrder(searchParams.get("sortOrder")),
+    }),
+    [searchParams],
+  );
+
+  const [keyword, setKeyword] = useState(currentSearch.keyword);
+  const [debouncedKeyword, setDebouncedKeyword] = useState(
+    currentSearch.keyword,
+  );
   const [status, setStatus] = useState<IssueStatus | undefined>(
-    parseStatus(searchParams.get("status")),
+    currentSearch.status,
   );
   const [category, setCategory] = useState<IssueCategory | undefined>(
-    parseCategory(searchParams.get("category")),
+    currentSearch.category,
   );
   const [assigneeId, setAssigneeId] = useState<string | undefined>(
-    searchParams.get("assigneeId") || undefined,
+    currentSearch.assigneeId,
   );
-  const [sortBy, setSortBy] = useState<SortBy>(
-    parseSortBy(searchParams.get("sortBy")),
-  );
+  const [sortBy, setSortBy] = useState<SortBy>(currentSearch.sortBy);
   const [sortOrder, setSortOrder] = useState<SortOrder>(
-    parseSortOrder(searchParams.get("sortOrder")),
+    currentSearch.sortOrder,
   );
+
+  // ブラウザの戻る/進む等で searchParams が変化した時に state を再同期
+  // debouncedKeyword も即時リセットして 300ms ラグを回避する
+  useEffect(() => {
+    setKeyword(currentSearch.keyword);
+    setDebouncedKeyword(currentSearch.keyword);
+    setStatus(currentSearch.status);
+    setCategory(currentSearch.category);
+    setAssigneeId(currentSearch.assigneeId);
+    setSortBy(currentSearch.sortBy);
+    setSortOrder(currentSearch.sortOrder);
+  }, [currentSearch]);
 
   // デバウンス
   useEffect(() => {
