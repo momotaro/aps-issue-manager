@@ -15,6 +15,7 @@
 /* ダークモード無効化: アプリは常にライトモードで表示 */
 html {
   color-scheme: light only;
+  background-color: #ffffff;
 }
 
 body {
