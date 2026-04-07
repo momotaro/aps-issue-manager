@@ -31,6 +31,7 @@ export function IssueSearchBar({ value, onChange }: Props) {
         <button
           type="button"
           onClick={() => onChange("")}
+          aria-label="検索をクリア"
           className="text-zinc-400 hover:text-zinc-600"
         >
           <svg

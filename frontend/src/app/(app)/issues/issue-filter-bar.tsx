@@ -21,6 +21,7 @@ export function IssueFilterBar({
         onChange={(e) =>
           onStatusChange((e.target.value as IssueStatus) || undefined)
         }
+        aria-label="ステータスで絞り込み"
         className="h-9 px-3 text-[13px] text-zinc-600 border border-zinc-200 rounded-lg bg-white outline-none"
       >
         <option value="">ステータス</option>
@@ -35,6 +36,7 @@ export function IssueFilterBar({
         onChange={(e) =>
           onCategoryChange((e.target.value as IssueCategory) || undefined)
         }
+        aria-label="種別で絞り込み"
         className="h-9 px-3 text-[13px] text-zinc-600 border border-zinc-200 rounded-lg bg-white outline-none"
       >
         <option value="">種別</option>
