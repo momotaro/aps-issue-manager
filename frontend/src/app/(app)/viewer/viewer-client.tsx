@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSharedApsViewer } from "@/components/aps-viewer-provider";
 import { ViewerSlot } from "@/components/viewer-slot";
 import { TEMP_PROJECT_ID, TEMP_REPORTER_ID } from "@/lib/constants";
@@ -11,7 +11,11 @@ import { useIssueFilters } from "./issue-filters.hooks";
 import { IssueFormPanel } from "./issue-form";
 import type { IssueFormValues } from "./issue-form.hooks";
 import { IssueListPanel } from "./issue-list-panel";
-import { IssuePinsOverlay, PinMarker } from "./issue-pins";
+import {
+  IssuePinsOverlay,
+  PendingPinMarker,
+  PlacementModeOverlay,
+} from "./issue-pins";
 import { useIssuePins } from "./issue-pins.hooks";
 import { useCreateIssue, useIssueList, useIssues } from "./issues-state.hooks";
 import { useListPanel } from "./list-panel.hooks";
@@ -25,10 +29,16 @@ import {
 } from "./photo-upload.hooks";
 import { usePhotoViewer } from "./photo-viewer.hooks";
 import { usePlacementMode } from "./placement-mode.hooks";
+import type { IssuePin } from "./types";
+
+// base62 エンコードされた UUID v7 は short-uuid で常に 22 文字
+const BASE62_RE = /^[0-9A-Za-z]{22}$/;
 
 export function ViewerClient() {
   const searchParams = useSearchParams();
-  const targetIssueId = searchParams.get("issueId");
+  const rawIssueId = searchParams.get("issueId");
+  const targetIssueId =
+    rawIssueId && BASE62_RE.test(rawIssueId) ? rawIssueId : null;
 
   const { viewer, isLoading, error } = useSharedApsViewer();
   const {
@@ -39,10 +49,21 @@ export function ViewerClient() {
   const createIssue = useCreateIssue();
   const { isPlacementMode, pendingPin, enterPlacementMode, clearPendingPin } =
     usePlacementMode(viewer);
-  const { positions, selectedPin, handlePinClick, closePopup } = useIssuePins(
+
+  // selectedPin を viewer-client で一元管理（一覧パネルとの共有のため）
+  const [selectedPin, setSelectedPin] = useState<IssuePin | null>(null);
+  const { positions, handlePinClick, closePopup } = useIssuePins(
     viewer,
     issues,
+    setSelectedPin,
   );
+
+  // pendingPin（追加中）と selectedPin（詳細表示中）は排他的
+  useEffect(() => {
+    if (pendingPin) {
+      setSelectedPin(null);
+    }
+  }, [pendingPin]);
 
   // List panel state
   const {
@@ -153,9 +174,27 @@ export function ViewerClient() {
     }
   }, [targetIssue, viewer, navigateToIssue]);
 
+  // URL issueId に対応するピンの詳細カードを自動オープン
+  // issues と targetIssueId を別々に監視することで、issues が後から読み込まれても確実に pin を選択できる
+  useEffect(() => {
+    if (!targetIssueId) return;
+    const pin = issues.find((p) => p.id === targetIssueId);
+    if (pin) setSelectedPin(pin);
+  }, [targetIssueId, issues]);
+
   const handleAddFromList = useCallback(() => {
+    setSelectedPin(null);
     enterPlacementMode();
   }, [enterPlacementMode]);
+
+  const handleCardClick = useCallback(
+    (issue: (typeof issueList)[number]) => {
+      navigateToIssue(issue);
+      const pin = issues.find((p) => p.id === issue.id);
+      if (pin) setSelectedPin(pin);
+    },
+    [navigateToIssue, issues],
+  );
 
   const handleFormSubmit = useCallback(
     (data: IssueFormValues) => {
@@ -216,6 +255,9 @@ export function ViewerClient() {
       <main className="flex-1 relative">
         {/* Persistent な APS Viewer の DOM をここに装着 */}
         <ViewerSlot />
+        {/* 指摘追加モード中のオーバーレイバナー */}
+        {isPlacementMode && <PlacementModeOverlay />}
+
         {!combinedLoading && !combinedError && (
           <>
             <IssuePinsOverlay
@@ -234,7 +276,7 @@ export function ViewerClient() {
                     top: pendingPin.screenPosition.y,
                   }}
                 >
-                  <PinMarker status="open" />
+                  <PendingPinMarker />
                 </div>
               </div>
             )}
@@ -263,7 +305,8 @@ export function ViewerClient() {
           onCategoryChange={setCategory}
           onAddClick={handleAddFromList}
           onClose={closeList}
-          onCardClick={navigateToIssue}
+          onCardClick={handleCardClick}
+          selectedIssueId={selectedPin?.id}
         />
       ) : (
         <ListToggleBar onOpen={openList} />

@@ -13,6 +13,13 @@
     "aegis-admin": {
       "command": "npx",
       "args": ["-y", "@fuwasegu/aegis", "--surface", "admin"]
+    },
+
+    "pencil": {
+      "type":"stdio",
+      "command":"/Applications/Pencil.app/Contents/Resources/app.asar.unpacked/out/mcp-server-darwin-arm64",
+      "args":["--app","desktop"],
+      "env":{}
     }
   }
 }

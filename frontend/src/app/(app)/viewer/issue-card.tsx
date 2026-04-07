@@ -1,14 +1,21 @@
 "use client";
 
 import type { IssueListItem } from "@/repositories/issue-repository";
+import { useScrollIntoViewWhenSelected } from "./issue-card.hooks";
 import { CATEGORY_LABELS, STATUS_COLORS, STATUS_LABELS } from "./types";
 
 interface IssueCardProps {
   issue: IssueListItem;
   onClick: (issue: IssueListItem) => void;
+  isSelected?: boolean;
 }
 
-export function IssueCard({ issue, onClick }: IssueCardProps) {
+export function IssueCard({
+  issue,
+  onClick,
+  isSelected = false,
+}: IssueCardProps) {
+  const ref = useScrollIntoViewWhenSelected(isSelected);
   const statusColor = STATUS_COLORS[issue.status];
   const categoryLabel = CATEGORY_LABELS[issue.category];
   const statusLabel = STATUS_LABELS[issue.status];
@@ -17,9 +24,14 @@ export function IssueCard({ issue, onClick }: IssueCardProps) {
 
   return (
     <button
+      ref={ref}
       type="button"
       onClick={() => onClick(issue)}
-      className="w-full text-left rounded-lg border border-zinc-200 p-3 hover:bg-zinc-50 transition-colors"
+      className={`w-full text-left rounded-lg border p-3 transition-colors ${
+        isSelected
+          ? "bg-[#EFF6FF] border-[#93C5FD]"
+          : "border-zinc-200 hover:bg-zinc-50"
+      }`}
     >
       <div className="flex items-center justify-between">
         <span
