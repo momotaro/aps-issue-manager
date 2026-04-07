@@ -1,6 +1,6 @@
 import type { hc } from "hono/client";
-import type { IssueCategory, IssueStatus } from "@/app/viewer/types";
 import { type AppType, apiClient } from "@/lib/api-client";
+import type { IssueCategory, IssueStatus } from "@/types/issue";
 
 type Client = ReturnType<typeof hc<AppType>>;
 
@@ -62,6 +62,9 @@ export const createIssueRepository = (client: Client) => ({
     status?: IssueStatus;
     category?: IssueCategory;
     assigneeId?: string;
+    q?: string;
+    sortBy?: "createdAt" | "updatedAt";
+    sortOrder?: "asc" | "desc";
   }): Promise<IssueListItem[]> => {
     const res = await client.api.issues.$get({
       query: filters ?? {},

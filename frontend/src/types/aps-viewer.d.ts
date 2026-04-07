@@ -15,6 +15,7 @@ declare namespace Autodesk {
 
     class GuiViewer3D {
       container: HTMLElement;
+      model: Model | null;
       impl: {
         camera: THREE.Camera;
         canvas: HTMLCanvasElement;
@@ -73,6 +74,7 @@ declare namespace Autodesk {
     }
 
     const CAMERA_CHANGE_EVENT: string;
+    const GEOMETRY_LOADED_EVENT: string;
 
     interface HitTestResult {
       intersectPoint: THREE.Vector3;
@@ -81,6 +83,7 @@ declare namespace Autodesk {
 
     class Model {
       getData(): unknown;
+      isLoadDone(): boolean;
     }
 
     class Document {

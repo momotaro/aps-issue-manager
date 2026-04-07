@@ -71,6 +71,21 @@ export type IssueFilters = {
   readonly category?: IssueCategory;
   /** 担当者で絞り込む。 */
   readonly assigneeId?: UserId;
+  /** タイトル・説明の部分一致検索（ILIKE）。 */
+  readonly keyword?: string;
+};
+
+/**
+ * クエリのソート・ページング等の制御オプション。
+ *
+ * @remarks
+ * ビジネスフィルタ（IssueFilters）とクエリ制御を分離するための型。
+ */
+export type QueryOptions = {
+  /** ソートカラム。デフォルトは updatedAt。 */
+  readonly sortBy?: "createdAt" | "updatedAt";
+  /** ソート方向。デフォルトは desc。 */
+  readonly sortOrder?: "asc" | "desc";
 };
 
 // ---------------------------------------------------------------------------
@@ -93,10 +108,12 @@ export type IssueQueryService = {
    * フィルター条件に一致する指摘の一覧を取得する。
    *
    * @param filters - フィルター条件（省略時は全件取得）
-   * @returns 指摘一覧（updatedAt 降順）
+   * @param options - ソート等のクエリ制御オプション
+   * @returns 指摘一覧（デフォルト: updatedAt 降順）
    */
   readonly findAll: (
     filters?: IssueFilters,
+    options?: QueryOptions,
   ) => Promise<readonly IssueListItem[]>;
 
   /**

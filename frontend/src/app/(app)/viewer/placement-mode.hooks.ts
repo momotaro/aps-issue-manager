@@ -28,10 +28,16 @@ export function usePlacementMode(viewer: Autodesk.Viewing.GuiViewer3D | null) {
 
   // Cursor management
   useEffect(() => {
-    if (!viewer) return;
+    if (!viewer?.container) return;
     viewer.container.style.cursor = isPlacementMode ? "crosshair" : "";
     return () => {
-      viewer.container.style.cursor = "";
+      try {
+        if (viewer?.container) {
+          viewer.container.style.cursor = "";
+        }
+      } catch {
+        // viewer が dispose 済みの場合は無視
+      }
     };
   }, [isPlacementMode, viewer]);
 

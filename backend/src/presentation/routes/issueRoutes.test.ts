@@ -81,6 +81,47 @@ describe("issueRoutes", () => {
       expect(body).toHaveLength(1);
       expect(body[0].id).toBe(issueBase62);
     });
+
+    it("テキスト検索パラメータ q を keyword として渡す", async () => {
+      mockQueryService.findAll.mockResolvedValue([]);
+      const res = await app.request("/api/issues?q=クラック");
+      expect(res.status).toBe(200);
+      expect(mockQueryService.findAll).toHaveBeenCalledWith(
+        expect.objectContaining({ keyword: "クラック" }),
+        undefined,
+      );
+    });
+
+    it("ソートパラメータを options として渡す", async () => {
+      mockQueryService.findAll.mockResolvedValue([]);
+      const res = await app.request(
+        "/api/issues?sortBy=createdAt&sortOrder=asc",
+      );
+      expect(res.status).toBe(200);
+      expect(mockQueryService.findAll).toHaveBeenCalledWith(
+        undefined,
+        expect.objectContaining({ sortBy: "createdAt", sortOrder: "asc" }),
+      );
+    });
+
+    it("パラメータなしではフィルタ・オプションなしで呼ばれる", async () => {
+      mockQueryService.findAll.mockResolvedValue([]);
+      await app.request("/api/issues");
+      expect(mockQueryService.findAll).toHaveBeenCalledWith(
+        undefined,
+        undefined,
+      );
+    });
+
+    it("不正な sortBy で 400 を返す", async () => {
+      const res = await app.request("/api/issues?sortBy=invalid");
+      expect(res.status).toBe(400);
+    });
+
+    it("不正な sortOrder で 400 を返す", async () => {
+      const res = await app.request("/api/issues?sortOrder=invalid");
+      expect(res.status).toBe(400);
+    });
   });
 
   describe("GET /api/issues/:id", () => {
