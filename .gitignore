@@ -9,6 +9,7 @@ coverage/
 
 .env
 .env.local
+.envrc
 *.log
 .DS_Store
 issue_overview.md
