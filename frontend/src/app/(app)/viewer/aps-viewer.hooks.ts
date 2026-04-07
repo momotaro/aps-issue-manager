@@ -58,29 +58,35 @@ async function fetchAccessToken(): Promise<string> {
   return data.access_token;
 }
 
-function useApsToken() {
+function useApsToken(enabled: boolean) {
   return useQuery({
     queryKey: ["aps", "token"],
     queryFn: fetchAccessToken,
     staleTime: 5 * 60 * 1000,
     retry: 2,
+    enabled,
   });
 }
 
-export function useApsViewer() {
+export function useApsViewer(enabled = false) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Autodesk.Viewing.GuiViewer3D | null>(null);
   const [viewer, setViewer] = useState<Autodesk.Viewing.GuiViewer3D | null>(
     null,
   );
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // enabled が true になった時点でローディング表示を開始
+  useEffect(() => {
+    if (enabled) setIsLoading(true);
+  }, [enabled]);
 
   const {
     data: accessToken,
     error: tokenError,
     isSuccess: tokenReady,
-  } = useApsToken();
+  } = useApsToken(enabled);
 
   const initViewer = useCallback(async (token: string) => {
     if (!APS_URN) {
@@ -141,6 +147,8 @@ export function useApsViewer() {
   }, []);
 
   useEffect(() => {
+    if (!enabled) return;
+
     if (tokenError) {
       setError(
         tokenError instanceof Error
@@ -166,7 +174,7 @@ export function useApsViewer() {
         viewerRef.current = null;
       }
     };
-  }, [tokenReady, accessToken, tokenError, initViewer]);
+  }, [enabled, tokenReady, accessToken, tokenError, initViewer]);
 
   return { containerRef, viewer, isLoading, error };
 }

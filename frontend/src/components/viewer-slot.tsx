@@ -12,7 +12,13 @@ import { useSharedApsViewer } from "./aps-viewer-provider";
  */
 export function ViewerSlot() {
   const slotRef = useRef<HTMLDivElement>(null);
-  const { containerRef, viewer, isLoading, error } = useSharedApsViewer();
+  const { containerRef, viewer, isLoading, error, requestInit } =
+    useSharedApsViewer();
+
+  // ViewerSlot がマウントされた時点で Viewer の初期化を開始する
+  useEffect(() => {
+    requestInit();
+  }, [requestInit]);
 
   // DOM 移動は mount/unmount のみ。viewer の初期化で再付け替えが起きないよう
   // viewer は依存配列に含めない。
