@@ -12,6 +12,7 @@ function attachElement(ref: { current: HTMLButtonElement | null }) {
 
 describe("useScrollIntoViewWhenSelected", () => {
   let scrollIntoViewSpy: ReturnType<typeof vi.spyOn>;
+  let cleanupElement: (() => void) | null = null;
 
   beforeEach(() => {
     scrollIntoViewSpy = vi
@@ -20,12 +21,16 @@ describe("useScrollIntoViewWhenSelected", () => {
   });
 
   afterEach(() => {
+    cleanupElement?.();
+    cleanupElement = null;
     vi.restoreAllMocks();
   });
 
   it("isSelected が false のとき scrollIntoView を呼ばない", () => {
     const { result } = renderHook(() => useScrollIntoViewWhenSelected(false));
-    attachElement(result.current as { current: HTMLButtonElement | null });
+    cleanupElement = attachElement(
+      result.current as { current: HTMLButtonElement | null },
+    );
     expect(scrollIntoViewSpy).not.toHaveBeenCalled();
   });
 
@@ -34,7 +39,9 @@ describe("useScrollIntoViewWhenSelected", () => {
       ({ isSelected }) => useScrollIntoViewWhenSelected(isSelected),
       { initialProps: { isSelected: false } },
     );
-    attachElement(result.current as { current: HTMLButtonElement | null });
+    cleanupElement = attachElement(
+      result.current as { current: HTMLButtonElement | null },
+    );
 
     act(() => rerender({ isSelected: true }));
 
@@ -50,7 +57,9 @@ describe("useScrollIntoViewWhenSelected", () => {
       ({ isSelected }) => useScrollIntoViewWhenSelected(isSelected),
       { initialProps: { isSelected: false } },
     );
-    attachElement(result.current as { current: HTMLButtonElement | null });
+    cleanupElement = attachElement(
+      result.current as { current: HTMLButtonElement | null },
+    );
 
     // false → true で 1 回呼ばれる
     act(() => rerender({ isSelected: true }));
@@ -66,7 +75,9 @@ describe("useScrollIntoViewWhenSelected", () => {
       ({ isSelected }) => useScrollIntoViewWhenSelected(isSelected),
       { initialProps: { isSelected: false } },
     );
-    attachElement(result.current as { current: HTMLButtonElement | null });
+    cleanupElement = attachElement(
+      result.current as { current: HTMLButtonElement | null },
+    );
 
     act(() => rerender({ isSelected: true }));
     act(() => rerender({ isSelected: false }));

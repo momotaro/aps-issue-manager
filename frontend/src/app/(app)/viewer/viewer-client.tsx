@@ -31,8 +31,8 @@ import { usePhotoViewer } from "./photo-viewer.hooks";
 import { usePlacementMode } from "./placement-mode.hooks";
 import type { IssuePin } from "./types";
 
-// base62（UUID v7 エンコード）形式チェック
-const BASE62_RE = /^[0-9A-Za-z]{1,22}$/;
+// base62 エンコードされた UUID v7 は short-uuid で常に 22 文字
+const BASE62_RE = /^[0-9A-Za-z]{22}$/;
 
 export function ViewerClient() {
   const searchParams = useSearchParams();
