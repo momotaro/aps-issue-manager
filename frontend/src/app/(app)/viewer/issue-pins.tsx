@@ -66,6 +66,25 @@ export function IssuePinsOverlay({
   );
 }
 
+export function PendingPinMarker() {
+  return (
+    <div className="flex flex-col items-center">
+      <div className="relative h-10 w-10 rounded-full bg-[#E5E7EB] ring-2 ring-white shadow-[0_2px_6px_rgba(0,0,0,0.15)]">
+        <div className="absolute left-1/2 top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#9CA3AF]" />
+        <svg
+          className="absolute right-0 top-0 h-3.5 w-3.5 text-[#374151]"
+          fill="currentColor"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path d="M21.731 2.269a2.625 2.625 0 00-3.712 0l-1.157 1.157 3.712 3.712 1.157-1.157a2.625 2.625 0 000-3.712zM19.513 8.199l-3.712-3.712-12.15 12.15a5.25 5.25 0 00-1.32 2.214l-.8 2.685a.75.75 0 00.933.933l2.685-.8a5.25 5.25 0 002.214-1.32L19.513 8.2z" />
+        </svg>
+      </div>
+      <div className="h-2 w-0.5 bg-[#9CA3AF]" />
+    </div>
+  );
+}
+
 export function PinMarker({ status }: { status: IssueStatus }) {
   const { color } = STATUS_CONFIG[status];
   return (
@@ -173,6 +192,34 @@ function PinPopup({
             </button>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+export function PlacementModeOverlay() {
+  return (
+    <div className="absolute top-0 inset-x-0 z-30 pointer-events-none">
+      <div className="flex items-center gap-3 px-4 h-10 bg-[rgba(15,23,42,0.85)]">
+        <svg
+          className="h-4 w-4 text-white shrink-0"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+          aria-hidden="true"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M12 2v4m0 12v4M2 12h4m12 0h4m-4.93-6.07-2.83 2.83M6.76 17.24l-2.83 2.83M17.24 17.24l2.83 2.83M6.76 6.76 3.93 3.93"
+          />
+        </svg>
+        <span className="text-[13px] font-medium text-white">
+          クリックでピンを配置
+        </span>
+        <div className="w-px h-5 bg-white/30" />
+        <span className="text-[12px] text-white/60">ESC でキャンセル</span>
       </div>
     </div>
   );

@@ -9,18 +9,13 @@ export function useCameraNavigation(
   const navigateToIssue = useCallback(
     (issue: IssueListItem) => {
       if (!viewer || typeof THREE === "undefined") return;
-      const pos = issue.position;
-      if (pos.type === "component" && pos.dbId != null) {
-        viewer.fitToView([pos.dbId]);
-      } else {
-        const target = new THREE.Vector3(
-          pos.worldPosition.x,
-          pos.worldPosition.y,
-          pos.worldPosition.z,
-        );
-        const eye = target.clone().add(new THREE.Vector3(5, 5, 5));
-        viewer.navigation.setView(eye, target);
-      }
+      const wp = issue.position.worldPosition;
+      const target = new THREE.Vector3(wp.x, wp.y, wp.z);
+      // 現在の視線方向を維持しつつピン座標を中心に据える
+      const eyeVec = viewer.navigation.getEyeVector().clone().normalize();
+      const distance = 8;
+      const eye = target.clone().sub(eyeVec.multiplyScalar(distance));
+      viewer.navigation.setView(eye, target);
     },
     [viewer],
   );

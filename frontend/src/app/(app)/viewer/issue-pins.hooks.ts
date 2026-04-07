@@ -1,5 +1,6 @@
 "use client";
 
+import type { Dispatch, SetStateAction } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { IssuePin } from "./types";
 
@@ -13,9 +14,9 @@ interface PinScreenPosition {
 export function useIssuePins(
   viewer: Autodesk.Viewing.GuiViewer3D | null,
   issues: IssuePin[],
+  setSelectedPin: Dispatch<SetStateAction<IssuePin | null>>,
 ) {
   const [positions, setPositions] = useState<PinScreenPosition[]>([]);
-  const [selectedPin, setSelectedPin] = useState<IssuePin | null>(null);
   const rafRef = useRef<number>(0);
 
   const updatePositions = useCallback(() => {
@@ -71,13 +72,16 @@ export function useIssuePins(
     };
   }, [viewer, updatePositions]);
 
-  const handlePinClick = useCallback((pin: IssuePin) => {
-    setSelectedPin((prev) => (prev?.id === pin.id ? null : pin));
-  }, []);
+  const handlePinClick = useCallback(
+    (pin: IssuePin) => {
+      setSelectedPin((prev) => (prev?.id === pin.id ? null : pin));
+    },
+    [setSelectedPin],
+  );
 
   const closePopup = useCallback(() => {
     setSelectedPin(null);
-  }, []);
+  }, [setSelectedPin]);
 
-  return { positions, selectedPin, handlePinClick, closePopup };
+  return { positions, handlePinClick, closePopup };
 }

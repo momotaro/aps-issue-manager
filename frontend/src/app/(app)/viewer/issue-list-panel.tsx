@@ -15,6 +15,7 @@ interface IssueListPanelProps {
   onAddClick: () => void;
   onClose: () => void;
   onCardClick: (issue: IssueListItem) => void;
+  selectedIssueId?: string;
 }
 
 export function IssueListPanel({
@@ -27,6 +28,7 @@ export function IssueListPanel({
   onAddClick,
   onClose,
   onCardClick,
+  selectedIssueId,
 }: IssueListPanelProps) {
   return (
     <div className="w-80 border-l border-zinc-200 bg-white shrink-0 flex flex-col h-full">
@@ -99,7 +101,12 @@ export function IssueListPanel({
           </p>
         ) : (
           issues.map((issue) => (
-            <IssueCard key={issue.id} issue={issue} onClick={onCardClick} />
+            <IssueCard
+              key={issue.id}
+              issue={issue}
+              onClick={onCardClick}
+              isSelected={issue.id === selectedIssueId}
+            />
           ))
         )}
       </div>
