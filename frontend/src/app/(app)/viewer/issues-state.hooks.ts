@@ -8,6 +8,23 @@ import {
 } from "@/repositories/issue-repository";
 import type { IssueCategory, IssuePin, IssueStatus } from "./types";
 
+type UpdateIssueInput = {
+  id: string;
+  actorId: string;
+  prev: {
+    title: string;
+    description: string;
+    category: IssueCategory;
+    status: IssueStatus;
+  };
+  next: {
+    title: string;
+    description: string;
+    category: IssueCategory;
+    status?: IssueStatus;
+  };
+};
+
 const ISSUES_QUERY_KEY = ["issues"] as const;
 
 function toIssuePin(item: IssueListItem): IssuePin {
@@ -65,6 +82,39 @@ export function useChangeIssueStatus() {
     }) => issueRepository.changeIssueStatus(id, status, actorId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ISSUES_QUERY_KEY });
+    },
+  });
+}
+
+export function useUpdateIssue() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, actorId, prev, next }: UpdateIssueInput) => {
+      const promises: Promise<{ ok: true }>[] = [];
+      if (next.title !== prev.title) {
+        promises.push(issueRepository.updateTitle(id, next.title, actorId));
+      }
+      if (next.description !== prev.description) {
+        promises.push(
+          issueRepository.updateDescription(id, next.description, actorId),
+        );
+      }
+      if (next.category !== prev.category) {
+        promises.push(
+          issueRepository.updateCategory(id, next.category, actorId),
+        );
+      }
+      if (next.status && next.status !== prev.status) {
+        promises.push(
+          issueRepository.changeIssueStatus(id, next.status, actorId),
+        );
+      }
+      await Promise.all(promises);
+    },
+    onSuccess: (_data, { id }) => {
+      queryClient.invalidateQueries({ queryKey: ISSUES_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ["issue-detail", id] });
     },
   });
 }

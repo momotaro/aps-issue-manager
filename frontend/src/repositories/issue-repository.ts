@@ -104,6 +104,45 @@ export const createIssueRepository = (client: Client) => ({
     return (await res.json()) as { ok: true };
   },
 
+  updateTitle: async (
+    id: string,
+    title: string,
+    actorId: string,
+  ): Promise<{ ok: true }> => {
+    const res = await client.api.issues[":id"].title.$put({
+      param: { id },
+      json: { title, actorId },
+    });
+    if (!res.ok) throw new Error("Failed to update issue title");
+    return (await res.json()) as { ok: true };
+  },
+
+  updateDescription: async (
+    id: string,
+    description: string,
+    actorId: string,
+  ): Promise<{ ok: true }> => {
+    const res = await client.api.issues[":id"].description.$put({
+      param: { id },
+      json: { description, actorId },
+    });
+    if (!res.ok) throw new Error("Failed to update issue description");
+    return (await res.json()) as { ok: true };
+  },
+
+  updateCategory: async (
+    id: string,
+    category: IssueCategory,
+    actorId: string,
+  ): Promise<{ ok: true }> => {
+    const res = await client.api.issues[":id"].category.$put({
+      param: { id },
+      json: { category, actorId },
+    });
+    if (!res.ok) throw new Error("Failed to update issue category");
+    return (await res.json()) as { ok: true };
+  },
+
   generatePhotoUploadUrl: async (
     issueId: string,
     fileName: string,

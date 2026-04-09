@@ -1,7 +1,11 @@
 "use client";
 
 import type { PhotoItem, PhotoPhase } from "@/repositories/issue-repository";
-import type { IssueFormValues } from "./issue-form.hooks";
+import { type IssueStatus, STATUS_LABELS } from "@/types/issue";
+import type {
+  IssueFormInitialValues,
+  IssueFormValues,
+} from "./issue-form.hooks";
 import { useIssueForm } from "./issue-form.hooks";
 import type { PendingConfirm, UploadingPhoto } from "./photo-upload.hooks";
 import { PhotoUploader } from "./photo-uploader";
@@ -9,7 +13,9 @@ import { CATEGORY_LABELS, type IssueCategory } from "./types";
 
 interface IssueFormPanelProps {
   isOpen: boolean;
-  defaultTitle?: string;
+  mode?: "create" | "edit";
+  initialValues?: IssueFormInitialValues;
+  resetKey?: string | null;
   onSubmit: (data: IssueFormValues) => void;
   onCancel: () => void;
   isSubmitting?: boolean;
@@ -28,7 +34,9 @@ export type { IssueFormValues };
 
 export function IssueFormPanel({
   isOpen,
-  defaultTitle = "",
+  mode = "create",
+  initialValues,
+  resetKey,
   onSubmit,
   onCancel,
   isSubmitting = false,
@@ -44,7 +52,9 @@ export function IssueFormPanel({
 }: IssueFormPanelProps) {
   const { form, photoPhase, setPhotoPhase } = useIssueForm(
     isOpen,
-    defaultTitle,
+    mode,
+    initialValues,
+    resetKey,
   );
   const {
     register,
@@ -53,6 +63,17 @@ export function IssueFormPanel({
   } = form;
 
   const showPhotoSection = onFilesSelected && onDeletePhoto && onPhotoClick;
+  const isEdit = mode === "edit";
+  const headerText = isEdit ? "指摘を編集" : "指摘を追加";
+  const submitLabel = isSubmitting
+    ? isEdit
+      ? "更新中..."
+      : "作成中..."
+    : isUploading
+      ? "アップロード中..."
+      : isEdit
+        ? "更新"
+        : "作成";
 
   return (
     <div
@@ -62,7 +83,7 @@ export function IssueFormPanel({
     >
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col h-full">
         <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-100">
-          <h2 className="text-sm font-semibold text-zinc-900">指摘を追加</h2>
+          <h2 className="text-sm font-semibold text-zinc-900">{headerText}</h2>
           <button
             type="button"
             onClick={onCancel}
@@ -152,6 +173,30 @@ export function IssueFormPanel({
             )}
           </div>
 
+          {isEdit && (
+            <div>
+              <label
+                htmlFor="issue-status"
+                className="block text-xs font-medium text-zinc-700 mb-1"
+              >
+                ステータス
+              </label>
+              <select
+                id="issue-status"
+                {...register("status")}
+                className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+              >
+                {(Object.entries(STATUS_LABELS) as [IssueStatus, string][]).map(
+                  ([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ),
+                )}
+              </select>
+            </div>
+          )}
+
           {showPhotoSection && (
             <PhotoUploader
               phase={photoPhase}
@@ -180,11 +225,7 @@ export function IssueFormPanel({
             disabled={isSubmitting || isUploading}
             className="flex-1 rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isSubmitting
-              ? "作成中..."
-              : isUploading
-                ? "アップロード中..."
-                : "作成"}
+            {submitLabel}
           </button>
         </div>
       </form>
