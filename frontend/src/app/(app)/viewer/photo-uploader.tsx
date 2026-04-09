@@ -269,11 +269,6 @@ function PendingThumbnail({
         alt={fileName}
         className="w-full h-full object-cover"
       />
-      <div className="absolute inset-0 flex items-center justify-center">
-        <span className="text-white text-[10px] font-medium drop-shadow-md">
-          確認待ち
-        </span>
-      </div>
     </div>
   );
 }

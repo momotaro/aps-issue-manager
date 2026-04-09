@@ -72,6 +72,7 @@ declare namespace Autodesk {
     interface Navigation {
       setView(position: THREE.Vector3, target: THREE.Vector3): void;
       getEyeVector(): THREE.Vector3;
+      getTarget(): THREE.Vector3;
     }
 
     const CAMERA_CHANGE_EVENT: string;
@@ -103,6 +104,10 @@ declare namespace Autodesk {
 }
 
 declare namespace THREE {
+  class Camera {
+    position: Vector3;
+  }
+
   class Vector3 {
     constructor(x?: number, y?: number, z?: number);
     x: number;
@@ -114,6 +119,4 @@ declare namespace THREE {
     normalize(): Vector3;
     multiplyScalar(s: number): Vector3;
   }
-
-  class Camera {}
 }

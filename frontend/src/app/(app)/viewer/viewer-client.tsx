@@ -12,12 +12,18 @@ import { IssueFormPanel } from "./issue-form";
 import type { IssueFormValues } from "./issue-form.hooks";
 import { IssueListPanel } from "./issue-list-panel";
 import {
+  EditingPinMarker,
   IssuePinsOverlay,
   PendingPinMarker,
   PlacementModeOverlay,
 } from "./issue-pins";
 import { useIssuePins } from "./issue-pins.hooks";
-import { useCreateIssue, useIssueList, useIssues } from "./issues-state.hooks";
+import {
+  useCreateIssue,
+  useIssueList,
+  useIssues,
+  useUpdateIssue,
+} from "./issues-state.hooks";
 import { useListPanel } from "./list-panel.hooks";
 import { ListToggleBar } from "./list-toggle-bar";
 import { PhotoComparison } from "./photo-comparison";
@@ -47,11 +53,20 @@ export function ViewerClient() {
     error: issuesError,
   } = useIssues(TEMP_PROJECT_ID);
   const createIssue = useCreateIssue();
-  const { isPlacementMode, pendingPin, enterPlacementMode, clearPendingPin } =
-    usePlacementMode(viewer);
+  const updateIssue = useUpdateIssue();
+  const {
+    isPlacementMode,
+    pendingPin,
+    enterPlacementMode,
+    exitPlacementMode,
+    clearPendingPin,
+  } = usePlacementMode(viewer);
 
   // selectedPin を viewer-client で一元管理（一覧パネルとの共有のため）
   const [selectedPin, setSelectedPin] = useState<IssuePin | null>(null);
+  // 編集中の Issue ID（追加フォームと排他的）
+  const [editingIssueId, setEditingIssueId] = useState<string | null>(null);
+
   const { positions, handlePinClick, closePopup } = useIssuePins(
     viewer,
     issues,
@@ -62,8 +77,17 @@ export function ViewerClient() {
   useEffect(() => {
     if (pendingPin) {
       setSelectedPin(null);
+      setEditingIssueId(null);
     }
   }, [pendingPin]);
+
+  // editingIssueId が設定されたら pendingPin と selectedPin をクリア
+  useEffect(() => {
+    if (editingIssueId) {
+      clearPendingPin();
+      setSelectedPin(null);
+    }
+  }, [editingIssueId, clearPendingPin]);
 
   // List panel state
   const {
@@ -78,7 +102,10 @@ export function ViewerClient() {
   );
 
   // パネル開閉時に APS Viewer をリサイズ
-  const isFormOpen = pendingPin !== null;
+  const isFormOpen = pendingPin !== null || editingIssueId !== null;
+  const formMode: "create" | "edit" =
+    editingIssueId !== null ? "edit" : "create";
+
   useEffect(() => {
     if (!viewer) return;
     // isListOpen / isFormOpen の変化でリサイズをトリガー
@@ -109,11 +136,19 @@ export function ViewerClient() {
   }
   const preIssueId = preIssueIdRef.current;
 
-  // Issue detail for photo operations
-  const activeIssueId = preIssueId ?? comparison.issueId;
+  // Issue detail: 選択中ピンの詳細（PinPopup 表示用）
+  const { data: selectedPinDetail } = useIssueDetail(selectedPin?.id ?? null);
+
+  // Issue detail: 編集対象の詳細（フォーム prefill 用）
+  const { data: editingIssueDetail } = useIssueDetail(editingIssueId);
+
+  // Issue detail: 写真操作のアクティブ対象（create 時は preIssueId、edit 時は editingIssueId）
+  const photoActiveIssueId = editingIssueId ?? preIssueId ?? comparison.issueId;
   // preIssueId は作成成功後のみ detail を取得（未作成時は 404 になるため）
   const issueDetailId =
-    (createIssue.isSuccess ? preIssueId : null) ?? comparison.issueId;
+    (createIssue.isSuccess ? preIssueId : null) ??
+    editingIssueId ??
+    comparison.issueId;
   const { data: issueDetail } = useIssueDetail(issueDetailId);
   const {
     uploading,
@@ -121,8 +156,15 @@ export function ViewerClient() {
     addFiles,
     confirmPending,
     cleanup: cleanupUploads,
-  } = usePhotoUpload(activeIssueId, TEMP_REPORTER_ID);
-  const deletePhoto = useDeletePhoto(activeIssueId);
+  } = usePhotoUpload(photoActiveIssueId, TEMP_REPORTER_ID);
+  const deletePhoto = useDeletePhoto(photoActiveIssueId);
+
+  // モード切替（editingIssueId の変化）時に残留アップロードをクリア
+  // ※ このeffectは cleanupUploads の宣言後に置く必要がある
+  // biome-ignore lint/correctness/useExhaustiveDependencies: editingIssueId はエフェクトのトリガーとして必要だが本体では使用しない
+  useEffect(() => {
+    cleanupUploads();
+  }, [editingIssueId, cleanupUploads]);
 
   const combinedLoading = isLoading || issuesLoading;
   const combinedError =
@@ -183,9 +225,12 @@ export function ViewerClient() {
   }, [targetIssueId, issues]);
 
   const handleAddFromList = useCallback(() => {
+    cleanupUploads(); // 編集モードの残留アップロードをクリア
+    closeComparison();
     setSelectedPin(null);
+    setEditingIssueId(null);
     enterPlacementMode();
-  }, [enterPlacementMode]);
+  }, [enterPlacementMode, cleanupUploads, closeComparison]);
 
   const handleCardClick = useCallback(
     (issue: (typeof issueList)[number]) => {
@@ -196,8 +241,56 @@ export function ViewerClient() {
     [navigateToIssue, issues],
   );
 
+  const handleEditClick = useCallback(
+    (issueId: string) => {
+      cleanupUploads(); // 追加/別編集モードの残留アップロードをクリア
+      closeComparison();
+      setEditingIssueId(issueId);
+    },
+    [cleanupUploads, closeComparison],
+  );
+
   const handleFormSubmit = useCallback(
     (data: IssueFormValues) => {
+      if (formMode === "edit" && editingIssueId) {
+        updateIssue.mutate(
+          {
+            id: editingIssueId,
+            actorId: TEMP_REPORTER_ID,
+            // editingIssueDetail が未ロードの場合は空値を prev にして全フィールドを必ず送る
+            prev: editingIssueDetail
+              ? {
+                  title: editingIssueDetail.title,
+                  description: editingIssueDetail.description,
+                  category: editingIssueDetail.category,
+                  status: editingIssueDetail.status,
+                }
+              : {
+                  title: "",
+                  description: "",
+                  category: "quality_defect" as const,
+                  status: "open" as const,
+                },
+            next: {
+              title: data.title,
+              description: data.description,
+              category: data.category,
+              status: data.status,
+            },
+          },
+          {
+            onSuccess: () => {
+              // 写真を先に confirm してから cleanup する
+              confirmPending();
+              setEditingIssueId(null);
+              cleanupUploads();
+            },
+          },
+        );
+        return;
+      }
+
+      // Create mode
       if (!pendingPin || !preIssueId) return;
       createIssue.mutate(
         {
@@ -228,15 +321,28 @@ export function ViewerClient() {
         },
       );
     },
-    [pendingPin, createIssue, preIssueId, confirmPending, clearPendingPin],
+    [
+      formMode,
+      editingIssueId,
+      editingIssueDetail,
+      updateIssue,
+      cleanupUploads,
+      pendingPin,
+      preIssueId,
+      createIssue,
+      confirmPending,
+      clearPendingPin,
+    ],
   );
 
   const handleFormCancel = useCallback(() => {
     preIssueIdRef.current = null;
     createIssue.reset();
     cleanupUploads();
+    exitPlacementMode();
     clearPendingPin();
-  }, [createIssue, cleanupUploads, clearPendingPin]);
+    setEditingIssueId(null);
+  }, [createIssue, cleanupUploads, exitPlacementMode, clearPendingPin]);
 
   const handleDeletePhoto = useCallback(
     (photoId: string) => {
@@ -247,8 +353,20 @@ export function ViewerClient() {
 
   const photos = issueDetail?.photos ?? [];
 
+  // 編集フォームの初期値
+  const editInitialValues = editingIssueDetail
+    ? {
+        title: editingIssueDetail.title,
+        description: editingIssueDetail.description,
+        category: editingIssueDetail.category,
+        status: editingIssueDetail.status,
+      }
+    : undefined;
+
   // IssueFormPanel の right 位置: リストパネル表示時は 320px、非表示時は 36px
   const formRightClass = isListOpen ? "right-80" : "right-9";
+
+  const isUpdating = updateIssue.isPending;
 
   return (
     <div className="flex flex-1 overflow-hidden">
@@ -266,6 +384,8 @@ export function ViewerClient() {
               onPinClick={isPlacementMode ? () => {} : handlePinClick}
               onClose={closePopup}
               onComparePhotos={openComparison}
+              onEdit={handleEditClick}
+              issueDetail={selectedPinDetail}
             />
             {pendingPin && (
               <div className="absolute inset-0 pointer-events-none z-20">
@@ -280,12 +400,28 @@ export function ViewerClient() {
                 </div>
               </div>
             )}
+            {editingIssueId &&
+              (() => {
+                const editingPos = positions.find(
+                  (p) => p.pin.id === editingIssueId,
+                );
+                return editingPos?.visible ? (
+                  <div className="absolute inset-0 pointer-events-none z-20">
+                    <div
+                      className="absolute -translate-x-1/2 -translate-y-full"
+                      style={{ left: editingPos.x, top: editingPos.y }}
+                    >
+                      <EditingPinMarker status={editingPos.pin.status} />
+                    </div>
+                  </div>
+                ) : null;
+              })()}
           </>
         )}
 
         {/* Photo Comparison overlay */}
         {comparison.isOpen && comparison.issueId && (
-          <div className="absolute bottom-4 left-4 z-30 w-[600px]">
+          <div className="absolute bottom-4 left-4 z-30 w-[480px]">
             <PhotoComparison
               photos={photos}
               onClose={closeComparison}
@@ -314,10 +450,18 @@ export function ViewerClient() {
 
       <IssueFormPanel
         isOpen={isFormOpen}
-        defaultTitle={pendingPin?.objectName}
+        mode={formMode}
+        resetKey={editingIssueId}
+        initialValues={
+          formMode === "edit"
+            ? editInitialValues
+            : pendingPin?.objectName
+              ? { title: pendingPin.objectName }
+              : undefined
+        }
         onSubmit={handleFormSubmit}
         onCancel={handleFormCancel}
-        isSubmitting={createIssue.isPending}
+        isSubmitting={createIssue.isPending || isUpdating}
         isUploading={uploading.length > 0}
         photos={photos}
         uploading={uploading}

@@ -21,10 +21,10 @@ export function PhotoComparison({
     photos.findIndex((p) => p.id === photo.id);
 
   return (
-    <div className="rounded-lg border border-zinc-200 bg-white p-5 shadow-lg">
+    <div className="w-[480px] rounded-lg border border-zinc-200 bg-white shadow-lg overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-base font-semibold text-zinc-900">写真比較</h3>
+      <div className="flex items-center justify-between px-4 border-b border-zinc-200 h-12">
+        <h3 className="text-sm font-semibold text-zinc-900">写真比較</h3>
         <button
           type="button"
           onClick={onClose}
@@ -48,70 +48,87 @@ export function PhotoComparison({
         </button>
       </div>
 
-      {/* Columns */}
-      <div className="flex gap-4">
-        {/* Before */}
-        <div className="flex-1 space-y-2">
+      {/* 是正前 */}
+      <div className="p-4 border-b border-zinc-200">
+        <div className="flex items-center justify-between mb-2.5">
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-red-500" />
-            <span className="text-sm font-semibold text-zinc-900">是正前</span>
+            <span className="text-[13px] font-semibold text-zinc-900">
+              是正前
+            </span>
           </div>
-          {beforePhotos.length > 0 ? (
-            <div className="space-y-2">
-              {beforePhotos.map((photo) => (
-                <button
-                  key={photo.id}
-                  type="button"
-                  onClick={() => onPhotoClick(getGlobalIndex(photo))}
-                  className="w-full rounded-lg overflow-hidden bg-zinc-800"
-                >
-                  {/* biome-ignore lint/performance/noImgElement: external MinIO URL */}
-                  <img
-                    src={getPhotoUrl(photo.storagePath)}
-                    alt={photo.fileName}
-                    className="w-full h-44 object-cover"
-                  />
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="flex items-center justify-center h-44 rounded-lg bg-zinc-100 text-zinc-400 text-sm">
-              写真なし
-            </div>
+          {beforePhotos.length > 0 && (
+            <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-600">
+              {beforePhotos.length}枚
+            </span>
           )}
         </div>
+        {beforePhotos.length > 0 ? (
+          <PhotoGrid
+            photos={beforePhotos}
+            onPhotoClick={(photo) => onPhotoClick(getGlobalIndex(photo))}
+          />
+        ) : (
+          <div className="flex items-center justify-center h-[88px] rounded-md bg-zinc-100 text-zinc-400 text-sm">
+            写真なし
+          </div>
+        )}
+      </div>
 
-        {/* After */}
-        <div className="flex-1 space-y-2">
+      {/* 是正後 */}
+      <div className="p-4">
+        <div className="flex items-center justify-between mb-2.5">
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-emerald-500" />
-            <span className="text-sm font-semibold text-zinc-900">是正後</span>
+            <span className="text-[13px] font-semibold text-zinc-900">
+              是正後
+            </span>
           </div>
-          {afterPhotos.length > 0 ? (
-            <div className="space-y-2">
-              {afterPhotos.map((photo) => (
-                <button
-                  key={photo.id}
-                  type="button"
-                  onClick={() => onPhotoClick(getGlobalIndex(photo))}
-                  className="w-full rounded-lg overflow-hidden bg-zinc-800"
-                >
-                  {/* biome-ignore lint/performance/noImgElement: external MinIO URL */}
-                  <img
-                    src={getPhotoUrl(photo.storagePath)}
-                    alt={photo.fileName}
-                    className="w-full h-44 object-cover"
-                  />
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="flex items-center justify-center h-44 rounded-lg bg-zinc-100 text-zinc-400 text-sm">
-              写真なし
-            </div>
+          {afterPhotos.length > 0 && (
+            <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600">
+              {afterPhotos.length}枚
+            </span>
           )}
         </div>
+        {afterPhotos.length > 0 ? (
+          <PhotoGrid
+            photos={afterPhotos}
+            onPhotoClick={(photo) => onPhotoClick(getGlobalIndex(photo))}
+          />
+        ) : (
+          <div className="flex items-center justify-center h-[88px] rounded-md bg-zinc-100 text-zinc-400 text-sm">
+            写真なし
+          </div>
+        )}
       </div>
+    </div>
+  );
+}
+
+function PhotoGrid({
+  photos,
+  onPhotoClick,
+}: {
+  photos: PhotoItem[];
+  onPhotoClick: (photo: PhotoItem) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {photos.map((photo) => (
+        <button
+          key={photo.id}
+          type="button"
+          onClick={() => onPhotoClick(photo)}
+          className="h-[88px] w-[88px] shrink-0 rounded-md overflow-hidden bg-zinc-200 hover:opacity-90 transition-opacity"
+        >
+          {/* biome-ignore lint/performance/noImgElement: external MinIO URL */}
+          <img
+            src={getPhotoUrl(photo.storagePath)}
+            alt={photo.fileName}
+            className="h-full w-full object-cover"
+          />
+        </button>
+      ))}
     </div>
   );
 }
