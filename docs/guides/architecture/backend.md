@@ -2,8 +2,14 @@
 
 ## 依存方向の設計意図
 
-```
-presentation → application → domain ← infrastructure
+```mermaid
+graph LR
+  P["Presentation<br/>Hono ルート"] --> A["Application<br/>ユースケース"]
+  A --> D["Domain<br/>エンティティ・値オブジェクト<br/>Repository IF"]
+  I["Infrastructure<br/>Drizzle ORM / MinIO / APS"] -->|"実装"| D
+
+  style D fill:#e8f5e9,stroke:#2e7d32
+  style I fill:#fff3e0,stroke:#e65100
 ```
 
 - `domain` はどこにも依存しない（純粋なビジネスロジック）
@@ -101,10 +107,14 @@ const testUseCases = initIssueUseCases(mockRepo, mockStorage);
 
 指摘のステータスは以下の順序で遷移する:
 
-```
-Open → In Progress → In Review → Done
-                   ↖︎            ↙︎
-                    (差し戻し)
+```mermaid
+stateDiagram-v2
+  [*] --> open : 指摘登録
+  open --> in_progress : 是正開始
+  in_progress --> in_review : 是正完了
+  in_review --> done : 承認
+  in_review --> in_progress : 差し戻し
+  done --> [*]
 ```
 
 - **Open**: 新規登録された指摘

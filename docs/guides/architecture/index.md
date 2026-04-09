@@ -8,19 +8,32 @@
 
 ## 1. 全体構成図
 
-```
-┌──────────────────┐        ┌─────────────────┐
-│    Frontend      │        │    Backend      │
-│  Next.js (3000)  │───────▶│  Hono/RPC (4000)│
-│  App Router      │ 型共有 │                 │
-└──────────────────┘        └────────┬────────┘
-                                     │
-                        ┌────────────┼────────────┐
-                        ▼            ▼            ▼
-                  ┌──────────┐ ┌──────────┐ ┌──────────┐
-                  │PostgreSQL│ │  MinIO   │ │  APS     │
-                  │  (5432)  │ │(9000/01) │ │  API     │
-                  └──────────┘ └──────────┘ └──────────┘
+```mermaid
+graph TB
+  subgraph Client["クライアント"]
+    Browser["ブラウザ"]
+  end
+
+  subgraph App["アプリケーション"]
+    FE["Frontend<br/>Next.js :3000"]
+    BE["Backend<br/>Hono/RPC :4000"]
+  end
+
+  subgraph Infra["インフラ（Docker）"]
+    DB["PostgreSQL :5432"]
+    MinIO["MinIO :9000/9001"]
+    Cleanup["minio-cleanup<br/>Orphan 自動削除"]
+  end
+
+  External["APS API<br/>Autodesk Platform Services"]
+
+  Browser -->|"HTTP"| FE
+  FE -->|"Hono RPC<br/>型共有"| BE
+  Browser -->|"Presigned PUT<br/>写真直接アップロード"| MinIO
+  BE --> DB
+  BE --> MinIO
+  BE -->|"2-legged OAuth"| External
+  Cleanup -->|"5分間隔スキャン<br/>10分超過ファイル削除"| MinIO
 ```
 
 ### コンテナ構成（docker-compose）
