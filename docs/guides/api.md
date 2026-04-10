@@ -38,7 +38,6 @@
 |------|-----|
 | Status | `open`, `in_progress`, `in_review`, `done` |
 | Category | `quality_defect`, `safety_hazard`, `construction_defect`, `design_change` |
-| Photo Phase | `before`, `after` |
 | User Role | `admin`, `manager`, `member` |
 
 ---
@@ -81,11 +80,19 @@ APS の 2-legged OAuth トークンを取得する。バックエンドでキャ
 | `issueId` | string | Yes | base62（22 文字）、クライアント側で生成 |
 | `projectId` | string | Yes | base62 |
 | `title` | string | Yes | 1〜200 文字 |
-| `description` | string | Yes | 最大 10,000 文字 |
 | `category` | string | Yes | Category 列挙値 |
 | `position` | Position | Yes | 空間 or 部材 |
 | `reporterId` | string | Yes | base62 |
 | `assigneeId` | string \| null | No | base62 or null |
+| `comment` | object | Yes | 初回コメント（下記参照） |
+
+**`comment` オブジェクト**
+
+| フィールド | 型 | 必須 | 制約 |
+|-----------|------|------|------|
+| `commentId` | string | Yes | base62（22 文字）、クライアント側で生成 |
+| `body` | string | Yes | 1〜10,000 文字 |
+| `attachments` | Photo[] | No | 添付写真（confirm 済み） |
 
 **レスポンス**: `201 { "issueId": "..." }`
 
@@ -131,7 +138,7 @@ APS の 2-legged OAuth トークンを取得する。バックエンドでキャ
 
 ### `GET /api/issues/:id`
 
-指摘の詳細（写真情報を含む）を取得する。
+指摘の詳細（コメント情報を含む）を取得する。
 
 **レスポンス**: `200 IssueDetail`
 
@@ -145,17 +152,21 @@ APS の 2-legged OAuth トークンを取得する。バックエンドでキャ
   "reporterName": "佐藤",
   "assigneeName": "山本",
   "position": { "type": "spatial", "worldPosition": { "x": 1, "y": 2, "z": 3 } },
-  "photoCount": 1,
   "createdAt": "2026-04-10T00:00:00.000Z",
   "updatedAt": "2026-04-10T00:00:00.000Z",
-  "description": "3F 東側通路に手すりが設置されていない",
-  "photos": [
+  "recentComments": [
     {
       "id": "...",
-      "fileName": "IMG_001.jpg",
-      "storagePath": "confirmed/.../before/....jpg",
-      "phase": "before",
-      "uploadedAt": "2026-04-10T00:00:00.000Z"
+      "body": "3F 東側通路に手すりが設置されていない",
+      "authorName": "佐藤",
+      "attachments": [
+        {
+          "id": "...",
+          "fileName": "IMG_001.jpg",
+          "uploadedAt": "2026-04-10T00:00:00.000Z"
+        }
+      ],
+      "createdAt": "2026-04-10T00:00:00.000Z"
     }
   ]
 }
@@ -178,15 +189,17 @@ APS の 2-legged OAuth トークンを取得する。バックエンドでキャ
 
 ---
 
-### `PUT /api/issues/:id/description`
+### `PUT /api/issues/:id`
 
-説明を更新する。
+指摘を一括更新する。
 
-**リクエストボディ**
+**リクエストボディ**（すべて任意）
 
 | フィールド | 型 | 必須 | 制約 |
 |-----------|------|------|------|
-| `description` | string | Yes | 最大 10,000 文字 |
+| `title` | string | No | 1〜200 文字 |
+| `category` | string | No | Category 列挙値 |
+| `assigneeId` | string \| null | No | base62 or null（解除） |
 | `actorId` | string | Yes | base62 |
 
 **レスポンス**: `200 { "ok": true }`
@@ -248,6 +261,55 @@ open → in_progress → in_review → done
 
 ---
 
+### `POST /api/issues/:id/correct`
+
+是正開始する（open → in_progress）。
+
+**リクエストボディ**
+
+| フィールド | 型 | 必須 | 制約 |
+|-----------|------|------|------|
+| `actorId` | string | Yes | base62 |
+
+**レスポンス**: `200 { "ok": true }`
+
+不正な遷移の場合: `422 { "error": { "code": "INVALID_TRANSITION", ... } }`
+
+---
+
+### `POST /api/issues/:id/review`
+
+是正完了・レビュー依頼する（in_progress → in_review）。
+
+**リクエストボディ**
+
+| フィールド | 型 | 必須 | 制約 |
+|-----------|------|------|------|
+| `actorId` | string | Yes | base62 |
+
+**レスポンス**: `200 { "ok": true }`
+
+不正な遷移の場合: `422 { "error": { "code": "INVALID_TRANSITION", ... } }`
+
+---
+
+### `POST /api/issues/:id/comments`
+
+指摘にコメントを追加する。
+
+**リクエストボディ**
+
+| フィールド | 型 | 必須 | 制約 |
+|-----------|------|------|------|
+| `commentId` | string | Yes | base62（22 文字）、クライアント側で生成 |
+| `body` | string | Yes | 1〜10,000 文字 |
+| `attachments` | Photo[] | No | 添付写真（confirm 済み） |
+| `actorId` | string | Yes | base62 |
+
+**レスポンス**: `201 { "ok": true }`
+
+---
+
 ### `DELETE /api/issues/:id`
 
 指摘を削除する（関連イベント・写真 Blob を含む）。
@@ -276,7 +338,7 @@ open → in_progress → in_review → done
 ]
 ```
 
-**イベント型一覧**: `IssueCreated`, `IssueTitleUpdated`, `IssueDescriptionUpdated`, `IssueStatusChanged`, `IssueCategoryChanged`, `IssueAssigneeChanged`, `PhotoAdded`, `PhotoRemoved`
+**イベント型一覧**: `IssueCreated`, `IssueTitleUpdated`, `IssueStatusChanged`, `IssueCategoryChanged`, `IssueAssigneeChanged`, `CommentAdded`
 
 ---
 
@@ -291,42 +353,11 @@ open → in_progress → in_review → done
 | フィールド | 型 | 必須 | 制約 |
 |-----------|------|------|------|
 | `fileName` | string | Yes | 1〜255 文字、パス区切り・`..` 禁止 |
-| `phase` | string | Yes | `before` \| `after` |
+| `commentId` | string | Yes | base62（対象コメントの ID） |
 
 **レスポンス**: `200 { "photoId": "...", "uploadUrl": "..." }`
 
 フロントエンドは返された `uploadUrl` に対して直接 PUT でファイルをアップロードする。
-
----
-
-### `POST /api/issues/:id/photos/confirm`
-
-アップロード完了を確認し、写真を指摘に紐づける。
-
-**リクエストボディ**
-
-| フィールド | 型 | 必須 | 制約 |
-|-----------|------|------|------|
-| `photoId` | string | Yes | base62（upload-url で取得した値） |
-| `fileName` | string | Yes | 1〜255 文字 |
-| `phase` | string | Yes | `before` \| `after` |
-| `actorId` | string | Yes | base62 |
-
-**レスポンス**: `201 { "ok": true }`
-
----
-
-### `DELETE /api/issues/:id/photos/:photoId`
-
-写真を削除する（DB イベント + Blob の両方を削除）。
-
-**リクエストボディ**
-
-| フィールド | 型 | 必須 | 制約 |
-|-----------|------|------|------|
-| `actorId` | string | Yes | base62 |
-
-**レスポンス**: `200 { "ok": true }`
 
 ---
 
