@@ -45,13 +45,11 @@ describe("getIssueHistoryUseCase", () => {
         payload: {
           projectId,
           title: "壁のひび割れ",
-          description: "3階東側の壁にひび割れを確認",
           status: "open",
           category: "quality_defect",
           position: createSpatialPosition(10, 20, 30),
           reporterId: actorId,
           assigneeId: null,
-          photos: [],
         },
       },
     ];

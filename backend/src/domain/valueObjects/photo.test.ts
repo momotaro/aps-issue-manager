@@ -8,32 +8,40 @@ describe("Photo", () => {
       const photo = createPhoto({
         id: generateId<PhotoId>(),
         fileName: "crack.jpg",
-        storagePath: "confirmed/issue1/before/photo1.jpg",
-        phase: "before",
+        storagePath: "confirmed/issue1/comment1/photo1.jpg",
         uploadedAt: new Date(),
       });
       expect(Object.isFrozen(photo)).toBe(true);
       expect(photo.fileName).toBe("crack.jpg");
-      expect(photo.phase).toBe("before");
     });
   });
 
   describe("pendingBlobPath", () => {
-    it("pending プレフィックスのパスを生成する", () => {
-      const path = pendingBlobPath("issue123", "photo456", "jpg");
-      expect(path).toBe("pending/issue123/photo456.jpg");
+    it("pending プレフィックスのパスを生成する（commentId 含む）", () => {
+      const path = pendingBlobPath("issue123", "comment789", "photo456", "jpg");
+      expect(path).toBe("pending/issue123/comment789/photo456.jpg");
     });
   });
 
   describe("confirmedBlobPath", () => {
-    it("before フェーズの confirmed パスを生成する", () => {
-      const path = confirmedBlobPath("issue123", "before", "photo456", "jpg");
-      expect(path).toBe("confirmed/issue123/before/photo456.jpg");
+    it("confirmed プレフィックスのパスを生成する（commentId 含む）", () => {
+      const path = confirmedBlobPath(
+        "issue123",
+        "comment789",
+        "photo456",
+        "jpg",
+      );
+      expect(path).toBe("confirmed/issue123/comment789/photo456.jpg");
     });
 
-    it("after フェーズの confirmed パスを生成する", () => {
-      const path = confirmedBlobPath("issue123", "after", "photo456", "png");
-      expect(path).toBe("confirmed/issue123/after/photo456.png");
+    it("異なる拡張子でも正しくパスを生成する", () => {
+      const path = confirmedBlobPath(
+        "issue123",
+        "comment789",
+        "photo456",
+        "png",
+      );
+      expect(path).toBe("confirmed/issue123/comment789/photo456.png");
     });
   });
 });

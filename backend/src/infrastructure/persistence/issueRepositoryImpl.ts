@@ -14,7 +14,7 @@ import { parseId } from "../../domain/valueObjects/brandedId.js";
 import type { createEventProjector } from "./eventProjectorImpl.js";
 import type { createEventStore } from "./eventStoreImpl.js";
 import { restoreCommentDates } from "./issueQueryServiceImpl.js";
-import { issueEvents, issueSnapshots, issuesRead } from "./schema.js";
+import { comments, issueEvents, issueSnapshots, issuesRead } from "./schema.js";
 import type { Db } from "./types.js";
 
 type EventStoreFactory = ReturnType<typeof createEventStore>;
@@ -83,6 +83,7 @@ export const createIssueRepository = (
   delete: async (id: IssueId): Promise<void> => {
     await db.transaction(async (tx) => {
       await tx.delete(issueSnapshots).where(eq(issueSnapshots.issueId, id));
+      await tx.delete(comments).where(eq(comments.issueId, id));
       await tx.delete(issuesRead).where(eq(issuesRead.id, id));
       await tx.delete(issueEvents).where(eq(issueEvents.issueId, id));
     });
@@ -107,7 +108,6 @@ const loadSnapshot = async (
     id: parseId<IssueId>(state.id as string),
     projectId: parseId<Issue["projectId"]>(state.projectId as string),
     title: state.title as string,
-    description: state.description as string,
     status: state.status as Issue["status"],
     category: state.category as Issue["category"],
     position: state.position as Issue["position"],
@@ -115,7 +115,6 @@ const loadSnapshot = async (
     assigneeId: state.assigneeId
       ? parseId<UserId>(state.assigneeId as string)
       : null,
-    photos: restorePhotoDates(state.photos as Array<Record<string, unknown>>),
     comments: restoreCommentDates(
       state.comments as Array<Record<string, unknown>>,
     ),
@@ -131,35 +130,20 @@ const snapshotToJson = (issue: Issue): Record<string, unknown> => ({
   id: issue.id,
   projectId: issue.projectId,
   title: issue.title,
-  description: issue.description,
   status: issue.status,
   category: issue.category,
   position: issue.position,
   reporterId: issue.reporterId,
   assigneeId: issue.assigneeId,
-  photos: issue.photos.map((p) => ({
-    ...p,
-    uploadedAt: p.uploadedAt.toISOString(),
-  })),
   comments: issue.comments.map((c) => ({
     ...c,
+    attachments: c.attachments.map((p) => ({
+      ...p,
+      uploadedAt: p.uploadedAt.toISOString(),
+    })),
     createdAt: c.createdAt.toISOString(),
   })),
   version: issue.version,
   createdAt: issue.createdAt.toISOString(),
   updatedAt: issue.updatedAt.toISOString(),
 });
-
-const restorePhotoDates = (
-  photos: Array<Record<string, unknown>>,
-): Issue["photos"] =>
-  photos.map(
-    (p) =>
-      ({
-        ...p,
-        uploadedAt:
-          typeof p.uploadedAt === "string"
-            ? new Date(p.uploadedAt)
-            : p.uploadedAt,
-      }) as Issue["photos"][number],
-  );

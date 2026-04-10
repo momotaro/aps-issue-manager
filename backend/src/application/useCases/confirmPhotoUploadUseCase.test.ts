@@ -1,16 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
-import type { Issue } from "../../domain/entities/issue.js";
-import type { IssueRepository } from "../../domain/repositories/issueRepository.js";
 import type { BlobStorage } from "../../domain/services/blobStorage.js";
 import {
+  type CommentId,
   type IssueId,
   type PhotoId,
-  type ProjectId,
   parseId,
-  type UserId,
 } from "../../domain/valueObjects/brandedId.js";
 import { createPhoto, type Photo } from "../../domain/valueObjects/photo.js";
-import { createSpatialPosition } from "../../domain/valueObjects/position.js";
 import { confirmPhotoUploadUseCase } from "./confirmPhotoUploadUseCase.js";
 
 // ---------------------------------------------------------------------------
@@ -18,40 +14,12 @@ import { confirmPhotoUploadUseCase } from "./confirmPhotoUploadUseCase.js";
 // ---------------------------------------------------------------------------
 
 const issueId = parseId<IssueId>("019560a0-0000-7000-8000-000000000001");
+const commentId = parseId<CommentId>("019560a0-0000-7000-8000-000000000020");
 const photoId = parseId<PhotoId>("019560a0-0000-7000-8000-000000000010");
-const actorId = parseId<UserId>("019560a0-0000-7000-8000-000000000100");
-
-const baseIssue: Issue = Object.freeze({
-  id: issueId,
-  projectId: parseId<ProjectId>("019560a0-0000-7000-8000-000000001000"),
-  title: "テスト指摘",
-  description: "テスト用",
-  status: "open" as const,
-  category: "quality_defect" as const,
-  position: createSpatialPosition(0, 0, 0),
-  reporterId: actorId,
-  assigneeId: null,
-  photos: [],
-  comments: [],
-  version: 1,
-  createdAt: new Date("2026-01-01"),
-  updatedAt: new Date("2026-01-01"),
-});
 
 // ---------------------------------------------------------------------------
 // モック
 // ---------------------------------------------------------------------------
-
-const createMockIssueRepo = (
-  overrides?: Partial<IssueRepository>,
-): IssueRepository => ({
-  load: vi.fn().mockResolvedValue(baseIssue),
-  save: vi.fn().mockResolvedValue(undefined),
-  saveSnapshot: vi.fn(),
-  getSnapshot: vi.fn(),
-  delete: vi.fn().mockResolvedValue(undefined),
-  ...overrides,
-});
 
 const createMockBlobStorage = (
   overrides?: Partial<BlobStorage>,
@@ -65,8 +33,7 @@ const createMockBlobStorage = (
           createPhoto({
             id: p.id,
             fileName: p.fileName,
-            storagePath: `confirmed/${_issueId}/${p.phase}/${p.id}.jpg`,
-            phase: p.phase,
+            storagePath: `confirmed/${_issueId}/${commentId}/${p.id}.jpg`,
             uploadedAt: new Date(),
           }),
         ),
@@ -82,105 +49,56 @@ const createMockBlobStorage = (
 // ---------------------------------------------------------------------------
 
 describe("confirmPhotoUploadUseCase", () => {
-  it("pending→confirmed 移動 + PhotoAdded イベント保存", async () => {
-    const issueRepo = createMockIssueRepo();
+  it("pending→confirmed 移動を実行する", async () => {
     const blobStorage = createMockBlobStorage();
-    const useCase = confirmPhotoUploadUseCase(issueRepo, blobStorage);
+    const useCase = confirmPhotoUploadUseCase(blobStorage);
 
-    const result = await useCase({
-      issueId,
-      photoId,
-      fileName: "crack.jpg",
-      phase: "before",
-      actorId,
-    });
+    const photos: readonly Photo[] = [
+      createPhoto({
+        id: photoId,
+        fileName: "crack.jpg",
+        storagePath: `pending/${issueId}/${commentId}/${photoId}.jpg`,
+        uploadedAt: new Date(),
+      }),
+    ];
+
+    const result = await useCase({ issueId, photos });
 
     expect(result.ok).toBe(true);
-
-    // confirmPending に pending パスの Photo が渡される
-    expect(blobStorage.confirmPending).toHaveBeenCalledWith(
-      issueId,
-      expect.arrayContaining([
-        expect.objectContaining({
-          id: photoId,
-          fileName: "crack.jpg",
-          phase: "before",
-          storagePath: `pending/${issueId}/${photoId}.jpg`,
-        }),
-      ]),
-    );
-
-    // PhotoAdded イベントには confirmed パスが記録される
-    expect(issueRepo.save).toHaveBeenCalledWith(
-      issueId,
-      [
-        expect.objectContaining({
-          type: "PhotoAdded",
-          payload: expect.objectContaining({
-            photo: expect.objectContaining({
-              id: photoId,
-              phase: "before",
-              storagePath: `confirmed/${issueId}/before/${photoId}.jpg`,
-            }),
-          }),
-        }),
-      ],
-      baseIssue.version,
-    );
+    expect(blobStorage.confirmPending).toHaveBeenCalledWith(issueId, photos);
   });
 
-  it("存在しない Issue で ISSUE_NOT_FOUND エラーを返す", async () => {
-    const issueRepo = createMockIssueRepo({
-      load: vi.fn().mockResolvedValue(null),
-    });
+  it("写真が空の場合は confirmPending を呼ばずに成功を返す", async () => {
     const blobStorage = createMockBlobStorage();
-    const useCase = confirmPhotoUploadUseCase(issueRepo, blobStorage);
+    const useCase = confirmPhotoUploadUseCase(blobStorage);
 
-    const result = await useCase({
-      issueId,
-      photoId,
-      fileName: "crack.jpg",
-      phase: "before",
-      actorId,
-    });
+    const result = await useCase({ issueId, photos: [] });
 
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.error.code).toBe("ISSUE_NOT_FOUND");
-    }
+    expect(result.ok).toBe(true);
     expect(blobStorage.confirmPending).not.toHaveBeenCalled();
-    expect(issueRepo.save).not.toHaveBeenCalled();
   });
 
-  it("重複する photoId で DUPLICATE_PHOTO エラーを返す", async () => {
-    const existingPhoto = createPhoto({
-      id: photoId,
-      fileName: "existing.jpg",
-      storagePath: `confirmed/${issueId}/before/${photoId}.jpg`,
-      phase: "before",
-      uploadedAt: new Date(),
+  it("confirmPending が失敗した場合、CONFIRM_FAILED エラーを返す", async () => {
+    const blobStorage = createMockBlobStorage({
+      confirmPending: vi.fn().mockRejectedValue(new Error("S3 move failed")),
     });
-    const issueWithPhoto: Issue = {
-      ...baseIssue,
-      photos: [existingPhoto],
-    };
-    const issueRepo = createMockIssueRepo({
-      load: vi.fn().mockResolvedValue(issueWithPhoto),
-    });
-    const blobStorage = createMockBlobStorage();
-    const useCase = confirmPhotoUploadUseCase(issueRepo, blobStorage);
+    const useCase = confirmPhotoUploadUseCase(blobStorage);
 
-    const result = await useCase({
-      issueId,
-      photoId,
-      fileName: "crack.jpg",
-      phase: "before",
-      actorId,
-    });
+    const photos: readonly Photo[] = [
+      createPhoto({
+        id: photoId,
+        fileName: "crack.jpg",
+        storagePath: `pending/${issueId}/${commentId}/${photoId}.jpg`,
+        uploadedAt: new Date(),
+      }),
+    ];
+
+    const result = await useCase({ issueId, photos });
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.error.code).toBe("DUPLICATE_PHOTO");
+      expect(result.error.code).toBe("CONFIRM_FAILED");
+      expect(result.error.message).toContain("S3 move failed");
     }
   });
 });

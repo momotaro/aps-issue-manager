@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ilike, inArray, or, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, type SQL } from "drizzle-orm";
 import type { IssueDomainEvent } from "../../domain/events/issueEvents.js";
 import type {
   IssueDetail,
@@ -12,10 +12,7 @@ import { parseId } from "../../domain/valueObjects/brandedId.js";
 import type { Comment } from "../../domain/valueObjects/comment.js";
 import type { IssueCategory } from "../../domain/valueObjects/issueCategory.js";
 import type { IssueStatus } from "../../domain/valueObjects/issueStatus.js";
-import {
-  confirmedBlobPath,
-  type Photo,
-} from "../../domain/valueObjects/photo.js";
+import type { Photo } from "../../domain/valueObjects/photo.js";
 import type { Position } from "../../domain/valueObjects/position.js";
 import { toDomain } from "./eventStoreImpl.js";
 import { issueEvents, issuesRead, users } from "./schema.js";
@@ -41,8 +38,6 @@ export const createIssueQueryService = (db: Db): IssueQueryService => ({
 
     return {
       ...toListItem(row, nameMap),
-      description: row.description,
-      photos: restorePhotoDates(row.photos as Array<Record<string, unknown>>),
       recentComments: restoreCommentDates(
         row.recentComments as Array<Record<string, unknown>>,
       ),
@@ -70,11 +65,7 @@ export const createIssueQueryService = (db: Db): IssueQueryService => ({
     if (filters?.keyword) {
       const escaped = filters.keyword.replace(/[\\%_]/g, "\\$&");
       const pattern = `%${escaped}%`;
-      const keywordCondition = or(
-        ilike(issuesRead.title, pattern),
-        ilike(issuesRead.description, pattern),
-      );
-      if (keywordCondition) conditions.push(keywordCondition);
+      conditions.push(ilike(issuesRead.title, pattern));
     }
 
     const sortColumn =
@@ -149,49 +140,32 @@ const toListItem = (
   reporterName: nameMap.get(row.reporterId) ?? null,
   assigneeName: row.assigneeId ? (nameMap.get(row.assigneeId) ?? null) : null,
   position: row.positionData as unknown as Position,
-  photoCount: row.photoCount,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
 });
 
-/** 旧データ互換のため、legacy な pending/ パスを confirmed/ パスへ正規化する。 */
-const normalizeStoragePath = (photo: Record<string, unknown>): string => {
-  const path = photo.storagePath;
-  if (typeof path !== "string") return String(path ?? "");
-  if (!path.startsWith("pending/")) return path;
-  // pending/{issueId}/{photoId}.{ext} → confirmed/{issueId}/{phase}/{photoId}.{ext}
-  const parts = path.split("/"); // ["pending", issueId, "photoId.ext"]
-  if (parts.length < 3) return path;
-  const issueId = parts[1];
-  const fileName = parts[2]; // "photoId.ext"
-  if (!issueId || !fileName) return path;
-  const phase = photo.phase;
-  if (phase !== "before" && phase !== "after") return path;
-  const photoId = fileName.split(".")[0];
-  const ext = fileName.split(".").pop() ?? "";
-  return confirmedBlobPath(issueId, phase, photoId, ext);
-};
-
 export const restoreCommentDates = (
-  comments: Array<Record<string, unknown>>,
+  rawComments: Array<Record<string, unknown>>,
 ): readonly Comment[] =>
-  (comments ?? []).map(
-    (c) =>
-      ({
-        ...c,
-        createdAt:
-          typeof c.createdAt === "string" ? new Date(c.createdAt) : c.createdAt,
-      }) as Comment,
-  );
+  (rawComments ?? []).map((c) => {
+    const attachments = c.attachments as
+      | Array<Record<string, unknown>>
+      | undefined;
+    return {
+      ...c,
+      createdAt:
+        typeof c.createdAt === "string" ? new Date(c.createdAt) : c.createdAt,
+      attachments: restorePhotoAttachmentDates(attachments ?? []),
+    } as Comment;
+  });
 
-const restorePhotoDates = (
+const restorePhotoAttachmentDates = (
   photos: Array<Record<string, unknown>>,
 ): readonly Photo[] =>
   photos.map(
     (p) =>
       ({
         ...p,
-        storagePath: normalizeStoragePath(p),
         uploadedAt:
           typeof p.uploadedAt === "string"
             ? new Date(p.uploadedAt)

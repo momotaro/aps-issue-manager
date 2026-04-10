@@ -1,7 +1,7 @@
 import type * as Minio from "minio";
 import { CopyDestinationOptions, CopySourceOptions } from "minio";
 import type { BlobStorage } from "../../domain/services/blobStorage.js";
-import type { Photo, PhotoPhase } from "../../domain/valueObjects/photo.js";
+import type { Photo } from "../../domain/valueObjects/photo.js";
 import {
   confirmedBlobPath,
   pendingBlobPath,
@@ -34,21 +34,21 @@ const validateId = (id: string, label: string): void => {
   }
 };
 
-/** confirmPending 時に Photo のパスが `pending/{issueId}/{photoId}.{ext}` と完全一致するか厳密に検証する。 */
+/** confirmPending 時に Photo のパスが `pending/{issueId}/{commentId}/{photoId}.{ext}` と完全一致するか厳密に検証する。 */
 const validatePendingPath = (issueId: string, photo: Photo): void => {
   validateId(issueId, "issueId");
   validateId(photo.id, "photoId");
 
   const escaped = PENDING_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const pattern = new RegExp(
-    `^${escaped}${issueId}/${photo.id}\\.([^.\\\\/]+)$`,
+    `^${escaped}${issueId}/[0-9a-f-]{36}/${photo.id}\\.([^.\\\\/]+)$`,
     "i",
   );
   const match = pattern.exec(photo.storagePath);
 
   if (!match) {
     throw new Error(
-      `Invalid storage path: expected "${PENDING_PREFIX}${issueId}/${photo.id}.{ext}", got "${photo.storagePath}"`,
+      `Invalid storage path: expected "${PENDING_PREFIX}${issueId}/{commentId}/${photo.id}.{ext}", got "${photo.storagePath}"`,
     );
   }
 
@@ -107,17 +107,18 @@ export const createBlobStorage = (
 ): BlobStorage => ({
   generateUploadUrl: async (
     issueId: string,
+    commentId: string,
     photoId: string,
     fileName: string,
-    _phase: PhotoPhase,
   ): Promise<{ uploadUrl: string }> => {
     validateId(issueId, "issueId");
+    validateId(commentId, "commentId");
     validateId(photoId, "photoId");
 
     const ext = fileName.split(".").pop()?.toLowerCase() ?? "";
     validateExt(ext);
 
-    const key = pendingBlobPath(issueId, photoId, ext);
+    const key = pendingBlobPath(issueId, commentId, photoId, ext);
     const uploadUrl = await (publicClient ?? client).presignedPutObject(
       bucket,
       key,
@@ -137,8 +138,11 @@ export const createBlobStorage = (
     for (const photo of photos) {
       validatePendingPath(issueId, photo);
 
+      // pending/{issueId}/{commentId}/{photoId}.{ext} からコメントIDとファイル拡張子を抽出
+      const parts = photo.storagePath.split("/");
+      const commentId = parts[2];
       const ext = photo.storagePath.split(".").pop() ?? "";
-      const newPath = confirmedBlobPath(issueId, photo.phase, photo.id, ext);
+      const newPath = confirmedBlobPath(issueId, commentId, photo.id, ext);
 
       const source = new CopySourceOptions({
         Bucket: bucket,

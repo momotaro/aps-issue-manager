@@ -14,7 +14,6 @@ import type { IssueId, ProjectId, UserId } from "../valueObjects/brandedId.js";
 import type { Comment } from "../valueObjects/comment.js";
 import type { IssueCategory } from "../valueObjects/issueCategory.js";
 import type { IssueStatus } from "../valueObjects/issueStatus.js";
-import type { Photo } from "../valueObjects/photo.js";
 import type { Position } from "../valueObjects/position.js";
 
 // ---------------------------------------------------------------------------
@@ -26,7 +25,6 @@ import type { Position } from "../valueObjects/position.js";
  *
  * @remarks
  * 一覧画面で必要な最小限のフィールドのみ含む。
- * 写真は件数のみ保持し、詳細は {@link IssueDetail} で取得する。
  */
 export type IssueListItem = {
   readonly id: IssueId;
@@ -37,7 +35,6 @@ export type IssueListItem = {
   readonly reporterName: string | null;
   readonly assigneeName: string | null;
   readonly position: Position;
-  readonly photoCount: number;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 };
@@ -46,11 +43,9 @@ export type IssueListItem = {
  * 指摘の詳細 DTO。
  *
  * @remarks
- * 一覧項目に加えて、説明文と写真の完全な一覧を含む。
+ * 一覧項目に加えて、最新コメントを含む。
  */
 export type IssueDetail = IssueListItem & {
-  readonly description: string;
-  readonly photos: readonly Photo[];
   /**
    * 最新5件のコメントキャッシュ。
    * 全コメントを取得する場合はイベント履歴（`getEventHistory`）を参照すること。
@@ -77,7 +72,7 @@ export type IssueFilters = {
   readonly category?: IssueCategory;
   /** 担当者で絞り込む。 */
   readonly assigneeId?: UserId;
-  /** タイトル・説明の部分一致検索（ILIKE）。 */
+  /** タイトルの部分一致検索（ILIKE）。 */
   readonly keyword?: string;
 };
 

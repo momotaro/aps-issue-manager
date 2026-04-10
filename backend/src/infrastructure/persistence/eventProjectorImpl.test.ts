@@ -46,7 +46,6 @@ describe("eventProjectorImpl（結合テスト）", () => {
     expect(rows[0].title).toBe("テスト指摘");
     expect(rows[0].status).toBe("open");
     expect(rows[0].version).toBe(1);
-    expect(rows[0].photoCount).toBe(0);
   });
 
   it("IssueTitleUpdated で title が UPDATE される", async () => {
@@ -64,22 +63,6 @@ describe("eventProjectorImpl（結合テスト）", () => {
       .where(eq(issuesRead.id, created.issueId));
     expect(rows[0].title).toBe("更新後タイトル");
     expect(rows[0].version).toBe(2);
-  });
-
-  it("IssueDescriptionUpdated で description が UPDATE される", async () => {
-    const created = await projectCreated();
-    const event: IssueDomainEvent = {
-      ...createEventMeta(created.issueId, testActorId, 2),
-      type: "IssueDescriptionUpdated",
-      payload: { description: "更新後説明" },
-    };
-    await projector.project([event]);
-
-    const rows = await db
-      .select()
-      .from(issuesRead)
-      .where(eq(issuesRead.id, created.issueId));
-    expect(rows[0].description).toBe("更新後説明");
   });
 
   it("IssueStatusChanged で status が UPDATE される", async () => {
@@ -131,33 +114,6 @@ describe("eventProjectorImpl（結合テスト）", () => {
     expect(rows[0].assigneeId).toBe(assigneeId);
   });
 
-  it("PhotoAdded で photoCount がインクリメントされる", async () => {
-    const created = await projectCreated();
-    const photo = createPhoto({
-      id: generateId<PhotoId>(),
-      fileName: "test.jpg",
-      storagePath: "confirmed/xxx/before/test.jpg",
-      phase: "before",
-      uploadedAt: new Date(),
-    });
-    const event: IssueDomainEvent = {
-      ...createEventMeta(created.issueId, testActorId, 2),
-      type: "PhotoAdded",
-      payload: { photo },
-    };
-    await projector.project([event]);
-
-    const rows = await db
-      .select()
-      .from(issuesRead)
-      .where(eq(issuesRead.id, created.issueId));
-    expect(rows[0].photoCount).toBe(1);
-    const photos = rows[0].photos as Array<{ id: string; fileName: string }>;
-    expect(photos).toHaveLength(1);
-    expect(photos[0].id).toBe(photo.id);
-    expect(photos[0].fileName).toBe("test.jpg");
-  });
-
   it("複数イベントを一括で project できる", async () => {
     const created = makeIssueCreatedEvent();
     const titleUpdated: IssueDomainEvent = {
@@ -177,40 +133,6 @@ describe("eventProjectorImpl（結合テスト）", () => {
     expect(rows[0].version).toBe(2);
   });
 
-  it("PhotoRemoved で photoCount がデクリメントされる", async () => {
-    const created = await projectCreated();
-    const photoId = generateId<PhotoId>();
-    const photo = createPhoto({
-      id: photoId,
-      fileName: "test.jpg",
-      storagePath: "confirmed/xxx/before/test.jpg",
-      phase: "before",
-      uploadedAt: new Date(),
-    });
-
-    const addEvent: IssueDomainEvent = {
-      ...createEventMeta(created.issueId, testActorId, 2),
-      type: "PhotoAdded",
-      payload: { photo },
-    };
-    await projector.project([addEvent]);
-
-    const removeEvent: IssueDomainEvent = {
-      ...createEventMeta(created.issueId, testActorId, 3),
-      type: "PhotoRemoved",
-      payload: { photoId },
-    };
-    await projector.project([removeEvent]);
-
-    const rows = await db
-      .select()
-      .from(issuesRead)
-      .where(eq(issuesRead.id, created.issueId));
-    expect(rows[0].photoCount).toBe(0);
-    const photos = rows[0].photos as Array<unknown>;
-    expect(photos).toHaveLength(0);
-  });
-
   // ---------------------------------------------------------------------------
   // CommentAdded
   // ---------------------------------------------------------------------------
@@ -219,12 +141,14 @@ describe("eventProjectorImpl（結合テスト）", () => {
     const makeCommentAddedEvent = (
       issueId: ReturnType<typeof makeIssueCreatedEvent>["issueId"],
       version: number,
+      attachments?: ReturnType<typeof createPhoto>[],
     ): IssueDomainEvent => {
       const meta = createEventMeta(issueId, testActorId, version);
       const comment = createComment({
         commentId: generateId<CommentId>(),
         body: `コメント${version}`,
         actorId: testActorId,
+        attachments: attachments ?? [],
         createdAt: meta.occurredAt,
       });
       return {
@@ -247,6 +171,32 @@ describe("eventProjectorImpl（結合テスト）", () => {
       expect(rows[0].body).toBe("コメント2");
       expect(rows[0].actorId).toBe(testActorId);
       expect(rows[0].issueId).toBe(created.issueId);
+    });
+
+    it("CommentAdded で comments テーブルに attachments JSONB が格納される", async () => {
+      const created = await projectCreated();
+      const photoId = generateId<PhotoId>();
+      const photo = createPhoto({
+        id: photoId,
+        fileName: "test.jpg",
+        storagePath: "confirmed/xxx/cmt/test.jpg",
+        uploadedAt: new Date("2026-01-15T10:00:00Z"),
+      });
+      const event = makeCommentAddedEvent(created.issueId, 2, [photo]);
+      await projector.project([event]);
+
+      const rows = await db
+        .select()
+        .from(comments)
+        .where(eq(comments.issueId, created.issueId));
+      expect(rows).toHaveLength(1);
+      const attachments = rows[0].attachments as Array<{
+        id: string;
+        fileName: string;
+      }>;
+      expect(attachments).toHaveLength(1);
+      expect(attachments[0].id).toBe(photoId);
+      expect(attachments[0].fileName).toBe("test.jpg");
     });
 
     it("CommentAdded で issues_read.recent_comments が更新される", async () => {

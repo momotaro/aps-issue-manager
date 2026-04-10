@@ -18,6 +18,7 @@ const bucket = "issues";
 const storage = createBlobStorage(minioClient, bucket);
 
 const issueId = "019577a0-0000-7000-8000-000000000099";
+const commentId = "019577a0-0000-7000-8000-000000000088";
 
 /** テスト前後にバケット内のオブジェクトをクリーンアップする。 */
 const cleanBucket = async () => {
@@ -38,7 +39,7 @@ const uploadToPending = async (
   photoId: string,
   ext: string,
 ): Promise<string> => {
-  const key = `pending/${issueId}/${photoId}.${ext}`;
+  const key = `pending/${issueId}/${commentId}/${photoId}.${ext}`;
   const data = Buffer.from("test image data");
   await minioClient.putObject(bucket, key, data);
   return key;
@@ -61,21 +62,23 @@ describe("blobStorageImpl（結合テスト）", () => {
     const photoId = generateId<PhotoId>();
     const result = await storage.generateUploadUrl(
       issueId,
+      commentId,
       photoId,
       "photo.jpg",
-      "before",
     );
 
     expect(result.uploadUrl).toBeDefined();
     expect(typeof result.uploadUrl).toBe("string");
-    expect(result.uploadUrl).toContain(`pending/${issueId}/${photoId}.jpg`);
+    expect(result.uploadUrl).toContain(
+      `pending/${issueId}/${commentId}/${photoId}.jpg`,
+    );
   });
 
   it("generateUploadUrl で不正な拡張子はエラーになる", async () => {
     const photoId = generateId<PhotoId>();
 
     await expect(
-      storage.generateUploadUrl(issueId, photoId, "malware.exe", "before"),
+      storage.generateUploadUrl(issueId, commentId, photoId, "malware.exe"),
     ).rejects.toThrow("Invalid file extension");
   });
 
@@ -83,7 +86,7 @@ describe("blobStorageImpl（結合テスト）", () => {
     const photoId = generateId<PhotoId>();
 
     await expect(
-      storage.generateUploadUrl("invalid-id", photoId, "photo.jpg", "before"),
+      storage.generateUploadUrl("invalid-id", commentId, photoId, "photo.jpg"),
     ).rejects.toThrow("Invalid issueId");
   });
 
@@ -99,7 +102,6 @@ describe("blobStorageImpl（結合テスト）", () => {
       id: photoId,
       fileName: "test.jpg",
       storagePath: pendingPath,
-      phase: "before",
       uploadedAt: new Date(),
     });
 
@@ -107,7 +109,7 @@ describe("blobStorageImpl（結合テスト）", () => {
 
     expect(confirmed).toHaveLength(1);
     expect(confirmed[0].storagePath).toBe(
-      `confirmed/${issueId}/before/${photoId}.jpg`,
+      `confirmed/${issueId}/${commentId}/${photoId}.jpg`,
     );
 
     // confirmed 側にオブジェクトが存在する
@@ -125,7 +127,6 @@ describe("blobStorageImpl（結合テスト）", () => {
       id: photoId,
       fileName: "test.jpg",
       storagePath: `wrong/${issueId}/${photoId}.jpg`,
-      phase: "before",
       uploadedAt: new Date(),
     });
 
@@ -146,7 +147,6 @@ describe("blobStorageImpl（結合テスト）", () => {
       id: photoId,
       fileName: "test.png",
       storagePath: pendingPath,
-      phase: "after",
       uploadedAt: new Date(),
     });
     await storage.confirmPending(issueId, [photo]);
@@ -183,7 +183,6 @@ describe("blobStorageImpl（結合テスト）", () => {
       id: photoId,
       fileName: "test.jpg",
       storagePath: pendingPath,
-      phase: "before",
       uploadedAt: new Date(),
     });
     const confirmed = await storage.confirmPending(issueId, [photo]);

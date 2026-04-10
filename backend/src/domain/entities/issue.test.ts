@@ -14,7 +14,6 @@ import { createPhoto } from "../valueObjects/photo.js";
 import { createSpatialPosition } from "../valueObjects/position.js";
 import {
   addComment,
-  addPhoto,
   applyEvent,
   changeAssignee,
   changeCategory,
@@ -22,8 +21,6 @@ import {
   createIssue,
   rehydrate,
   rehydrateFromSnapshot,
-  removePhoto,
-  updateDescription,
   updateTitle,
 } from "./issue.js";
 
@@ -39,26 +36,30 @@ const makeValidParams = () => ({
   issueId: generateId<IssueId>(),
   projectId,
   title: "壁のひび割れ",
-  description: "3階東側の壁にひび割れを確認",
   category: "quality_defect" as const,
   position: createSpatialPosition(10, 20, 30),
   reporterId,
   assigneeId: null,
-  photos: [] as const,
   actorId,
+  comment: {
+    commentId: generateId<CommentId>(),
+    body: "3階東側の壁にひび割れを確認",
+  },
 });
 
-/** createIssue で生成した IssueCreatedEvent を返す */
-const makeCreatedEvent = () => {
+/** createIssue で生成した [IssueCreatedEvent, CommentAddedEvent] タプルを返す */
+const makeCreatedEvents = () => {
   const result = createIssue(makeValidParams());
   if (!result.ok) throw new Error("createIssue failed");
   return result.value;
 };
 
-/** IssueCreatedEvent を適用した Issue 状態を返す */
+/** 両イベントを適用した Issue 状態を返す */
 const makeIssue = () => {
-  const event = makeCreatedEvent();
-  return applyEvent(null, event);
+  const result = createIssue(makeValidParams());
+  if (!result.ok) throw new Error("createIssue failed");
+  const [created, commented] = result.value;
+  return applyEvent(applyEvent(null, created), commented);
 };
 
 // ---------------------------------------------------------------------------
@@ -66,16 +67,22 @@ const makeIssue = () => {
 // ---------------------------------------------------------------------------
 
 describe("createIssue", () => {
-  it("有効なパラメータで IssueCreatedEvent を生成する", () => {
+  it("有効なパラメータで [IssueCreatedEvent, CommentAddedEvent] を生成する", () => {
     const result = createIssue(makeValidParams());
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    expect(result.value.type).toBe("IssueCreated");
-    expect(result.value.version).toBe(1);
-    expect(result.value.payload.status).toBe("open");
-    expect(result.value.payload.title).toBe("壁のひび割れ");
-    expect(result.value.payload.projectId).toBe(projectId);
+    expect(result.value[0].type).toBe("IssueCreated");
+    expect(result.value[0].version).toBe(1);
+    expect(result.value[0].payload.status).toBe("open");
+    expect(result.value[0].payload.title).toBe("壁のひび割れ");
+    expect(result.value[0].payload.projectId).toBe(projectId);
+
+    expect(result.value[1].type).toBe("CommentAdded");
+    expect(result.value[1].version).toBe(2);
+    expect(result.value[1].payload.comment.body).toBe(
+      "3階東側の壁にひび割れを確認",
+    );
   });
 
   it("空のタイトルでエラーを返す", () => {
@@ -93,7 +100,18 @@ describe("createIssue", () => {
     });
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.value.payload.title).toBe("壁のひび割れ");
+      expect(result.value[0].payload.title).toBe("壁のひび割れ");
+    }
+  });
+
+  it("空のコメント本文で EMPTY_COMMENT エラーを返す", () => {
+    const result = createIssue({
+      ...makeValidParams(),
+      comment: { commentId: generateId<CommentId>(), body: "  " },
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("EMPTY_COMMENT");
     }
   });
 });
@@ -104,11 +122,11 @@ describe("createIssue", () => {
 
 describe("applyEvent", () => {
   it("IssueCreated から初期状態を復元する", () => {
-    const issue = makeIssue();
+    const [created] = makeCreatedEvents();
+    const issue = applyEvent(null, created);
     expect(issue.status).toBe("open");
     expect(issue.title).toBe("壁のひび割れ");
     expect(issue.version).toBe(1);
-    expect(issue.photos).toHaveLength(0);
   });
 
   it("IssueTitleUpdated でタイトルを更新する", () => {
@@ -119,27 +137,26 @@ describe("applyEvent", () => {
 
     const updated = applyEvent(issue, event.value);
     expect(updated.title).toBe("壁のひび割れ（修正）");
-    expect(updated.version).toBe(2);
+    expect(updated.version).toBe(issue.version + 1);
   });
 });
 
 describe("rehydrate", () => {
   it("複数イベントを順に適用して最終状態を復元する", () => {
-    const createdEvent = makeCreatedEvent();
-    const issue1 = applyEvent(null, createdEvent);
+    const [createdEvent, commentEvent] = makeCreatedEvents();
+    const issue1 = applyEvent(applyEvent(null, createdEvent), commentEvent);
 
     const statusResult = changeStatus(issue1, "in_progress", actorId);
     expect(statusResult.ok).toBe(true);
     if (!statusResult.ok) return;
 
     const titleResult = updateTitle(issue1, "壁の大きなひび割れ", actorId);
-    // version 競合を避けるため、issue1 ベースで version +1 を使う
-    // rehydrate は events 配列を順に適用するので問題ない
     expect(titleResult.ok).toBe(true);
     if (!titleResult.ok) return;
 
     const events: IssueDomainEvent[] = [
       createdEvent,
+      commentEvent,
       statusResult.value,
       titleResult.value,
     ];
@@ -148,7 +165,6 @@ describe("rehydrate", () => {
     expect(final).not.toBeNull();
     expect(final?.status).toBe("in_progress");
     expect(final?.title).toBe("壁の大きなひび割れ");
-    expect(final?.version).toBe(2); // 同じ version +1 が2回なので最後に適用された方
   });
 
   it("空のイベント列で null を返す", () => {
@@ -170,7 +186,7 @@ describe("changeStatus", () => {
     expect(result.value.type).toBe("IssueStatusChanged");
     expect(result.value.payload.from).toBe("open");
     expect(result.value.payload.to).toBe("in_progress");
-    expect(result.value.version).toBe(2);
+    expect(result.value.version).toBe(issue.version + 1);
   });
 
   it("無効な遷移でエラーを返す", () => {
@@ -200,24 +216,6 @@ describe("updateTitle", () => {
     if (!result.ok) {
       expect(result.error.code).toBe("EMPTY_TITLE");
     }
-  });
-});
-
-describe("updateDescription", () => {
-  it("説明を更新する", () => {
-    const issue = makeIssue();
-    const result = updateDescription(issue, "新しい説明", actorId);
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-
-    expect(result.value.type).toBe("IssueDescriptionUpdated");
-    expect(result.value.payload.description).toBe("新しい説明");
-  });
-
-  it("同じ説明で NO_CHANGE エラーを返す", () => {
-    const issue = makeIssue();
-    const result = updateDescription(issue, issue.description, actorId);
-    expect(result.ok).toBe(false);
   });
 });
 
@@ -254,78 +252,11 @@ describe("changeAssignee", () => {
   });
 });
 
-describe("addPhoto / removePhoto", () => {
-  const photo = createPhoto({
-    id: generateId<PhotoId>(),
-    fileName: "crack.jpg",
-    storagePath: "confirmed/xxx/before/yyy.jpg",
-    phase: "before",
-    uploadedAt: new Date(),
-  });
-
-  it("写真を追加する", () => {
-    const issue = makeIssue();
-    const result = addPhoto(issue, photo, actorId);
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-
-    const updated = applyEvent(issue, result.value);
-    expect(updated.photos).toHaveLength(1);
-    expect(updated.photos[0].fileName).toBe("crack.jpg");
-  });
-
-  it("重複する写真 ID でエラーを返す", () => {
-    const issue = makeIssue();
-    const addResult = addPhoto(issue, photo, actorId);
-    if (!addResult.ok) return;
-
-    const withPhoto = applyEvent(issue, addResult.value);
-    const dupResult = addPhoto(withPhoto, photo, actorId);
-    expect(dupResult.ok).toBe(false);
-    if (!dupResult.ok) {
-      expect(dupResult.error.code).toBe("DUPLICATE_PHOTO");
-    }
-  });
-
-  it("写真を削除する", () => {
-    const issue = makeIssue();
-    const addResult = addPhoto(issue, photo, actorId);
-    if (!addResult.ok) return;
-
-    const withPhoto = applyEvent(issue, addResult.value);
-    const removeResult = removePhoto(withPhoto, photo.id, actorId);
-    expect(removeResult.ok).toBe(true);
-    if (!removeResult.ok) return;
-
-    const afterRemove = applyEvent(withPhoto, removeResult.value);
-    expect(afterRemove.photos).toHaveLength(0);
-  });
-
-  it("存在しない写真 ID でエラーを返す", () => {
-    const issue = makeIssue();
-    const result = removePhoto(issue, generateId<PhotoId>(), actorId);
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.error.code).toBe("PHOTO_NOT_FOUND");
-    }
-  });
-});
-
 // ---------------------------------------------------------------------------
 // applyEvent — コマンド結果の状態適用
 // ---------------------------------------------------------------------------
 
 describe("applyEvent（全イベント型の状態適用）", () => {
-  it("IssueDescriptionUpdated で説明を更新する", () => {
-    const issue = makeIssue();
-    const result = updateDescription(issue, "更新された説明", actorId);
-    if (!result.ok) throw new Error();
-
-    const updated = applyEvent(issue, result.value);
-    expect(updated.description).toBe("更新された説明");
-    expect(updated.version).toBe(2);
-  });
-
   it("IssueStatusChanged でステータスを更新する", () => {
     const issue = makeIssue();
     const result = changeStatus(issue, "in_progress", actorId);
@@ -404,7 +335,8 @@ describe("addComment", () => {
     if (!result.ok) return;
     expect(result.value.payload.comment.body).toBe("本文");
     const updated = applyEvent(issue, result.value);
-    expect(updated.comments[0].body).toBe("本文");
+    expect(updated.comments).toHaveLength(2); // 初回コメント + 追加分
+    expect(updated.comments[1].body).toBe("本文");
   });
 
   it(`本文が ${COMMENT_MAX_LENGTH} 文字を超える場合 BODY_TOO_LONG エラーを返す`, () => {
@@ -428,19 +360,52 @@ describe("addComment", () => {
     const result = addComment(issue, generateId<CommentId>(), maxBody, actorId);
     expect(result.ok).toBe(true);
   });
+
+  it("attachments 付きのコメントを追加できる", () => {
+    const issue = makeIssue();
+    const commentId = generateId<CommentId>();
+    const photo = createPhoto({
+      id: generateId<PhotoId>(),
+      fileName: "crack.jpg",
+      storagePath: "confirmed/xxx/cmt/yyy.jpg",
+      uploadedAt: new Date(),
+    });
+    const result = addComment(issue, commentId, "写真付き", actorId, [photo]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.value.payload.comment.attachments).toHaveLength(1);
+    expect(result.value.payload.comment.attachments[0].fileName).toBe(
+      "crack.jpg",
+    );
+  });
+
+  it("attachments 省略時は空配列になる", () => {
+    const issue = makeIssue();
+    const result = addComment(
+      issue,
+      generateId<CommentId>(),
+      "添付なし",
+      actorId,
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.value.payload.comment.attachments).toHaveLength(0);
+  });
 });
 
 describe("applyEvent（CommentAdded）", () => {
   it("CommentAdded で comments 配列にコメントが追加される", () => {
     const issue = makeIssue();
-    expect(issue.comments).toHaveLength(0);
+    expect(issue.comments).toHaveLength(1); // 初回コメント
 
     const result = addComment(issue, generateId<CommentId>(), "本文", actorId);
     if (!result.ok) throw new Error();
 
     const updated = applyEvent(issue, result.value);
-    expect(updated.comments).toHaveLength(1);
-    expect(updated.comments[0].body).toBe("本文");
+    expect(updated.comments).toHaveLength(2);
+    expect(updated.comments[1].body).toBe("本文");
     expect(updated.version).toBe(issue.version + 1);
   });
 
@@ -454,21 +419,22 @@ describe("applyEvent（CommentAdded）", () => {
     if (!r2.ok) throw new Error();
     const issue3 = applyEvent(issue2, r2.value);
 
-    expect(issue3.comments).toHaveLength(2);
-    expect(issue3.comments[1].body).toBe("2件目");
+    expect(issue3.comments).toHaveLength(3); // 初回 + 2件
+    expect(issue3.comments[2].body).toBe("2件目");
   });
 
   it("applyEvent は元の issue を変更しない（イミュータビリティ）", () => {
     const issue = makeIssue();
+    const originalLen = issue.comments.length;
     const result = addComment(issue, generateId<CommentId>(), "本文", actorId);
     if (!result.ok) throw new Error();
     applyEvent(issue, result.value);
-    expect(issue.comments).toHaveLength(0);
+    expect(issue.comments).toHaveLength(originalLen);
   });
 
   it("rehydrate で CommentAdded を含むイベント列から正しく復元できる", () => {
-    const createdEvent = makeCreatedEvent();
-    const issue = applyEvent(null, createdEvent);
+    const [createdEvent, initialComment] = makeCreatedEvents();
+    const issue = applyEvent(applyEvent(null, createdEvent), initialComment);
 
     const r1 = addComment(issue, generateId<CommentId>(), "コメント1", actorId);
     if (!r1.ok) throw new Error();
@@ -481,11 +447,12 @@ describe("applyEvent（CommentAdded）", () => {
     );
     if (!r2.ok) throw new Error();
 
-    const final = rehydrate([createdEvent, r1.value, r2.value]);
+    const final = rehydrate([createdEvent, initialComment, r1.value, r2.value]);
     expect(final).not.toBeNull();
-    expect(final?.comments).toHaveLength(2);
-    expect(final?.comments[0].body).toBe("コメント1");
-    expect(final?.comments[1].body).toBe("コメント2");
+    expect(final?.comments).toHaveLength(3); // 初回 + 2件
+    expect(final?.comments[0].body).toBe("3階東側の壁にひび割れを確認");
+    expect(final?.comments[1].body).toBe("コメント1");
+    expect(final?.comments[2].body).toBe("コメント2");
   });
 });
 
@@ -495,7 +462,7 @@ describe("applyEvent（CommentAdded）", () => {
 
 describe("rehydrateFromSnapshot", () => {
   it("スナップショットと差分イベントから最終状態を復元する", () => {
-    const issue = makeIssue(); // version 1 のスナップショットとみなす
+    const issue = makeIssue(); // version 2 のスナップショットとみなす
 
     const statusResult = changeStatus(issue, "in_progress", actorId);
     if (!statusResult.ok) throw new Error();
@@ -512,7 +479,7 @@ describe("rehydrateFromSnapshot", () => {
     ]);
     expect(final.status).toBe("in_progress");
     expect(final.title).toBe("更新タイトル");
-    expect(final.version).toBe(3);
+    expect(final.version).toBe(issue.version + 2);
   });
 
   it("差分イベントが空ならスナップショットをそのまま返す", () => {

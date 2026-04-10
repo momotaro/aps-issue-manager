@@ -33,8 +33,8 @@ type IssueRepository = {
 
 // domain/services/blobStorage.ts
 type BlobStorage = {
-    generateUploadUrl: (issueId: string, photoId: string, fileName: string, phase: PhotoPhase) => Promise<{ uploadUrl: string }>;
-    confirmPending: (issueId: string, photos: Photo[]) => Promise<readonly Photo[]>;
+    generateUploadUrl: (issueId: string, commentId: string, photoId: string, fileName: string) => Promise<{ uploadUrl: string }>;
+    confirmPending: (issueId: string, commentId: string, photos: Photo[]) => Promise<readonly Photo[]>;
     deleteByIssue: (issueId: string) => Promise<void>;
     deletePhoto: (storagePath: string) => Promise<void>;
 };
@@ -52,8 +52,8 @@ const initIssueUseCases = (
     create: async (input) => {
         const issue = Issue.create(input);
         await repo.save(issue);
-        if (input.photos.length > 0) {
-            await storage.confirmPending(issue.id, input.photos);
+        if (input.comment.attachments?.length) {
+            await storage.confirmPending(issue.id, input.comment.commentId, input.comment.attachments);
         }
         return issue;
     },
@@ -98,7 +98,7 @@ const mockRepo: IssueRepository = {
     save: async () => {},
 };
 const mockStorage: BlobStorage = {
-    confirmPending: async () => {},
+    confirmPending: async () => [],
 };
 const testUseCases = initIssueUseCases(mockRepo, mockStorage);
 ```

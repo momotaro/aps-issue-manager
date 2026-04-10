@@ -3,14 +3,13 @@ import { applyEvent, createIssue } from "../../domain/entities/issue.js";
 import type { IssueRepository } from "../../domain/repositories/issueRepository.js";
 import type { BlobStorage } from "../../domain/services/blobStorage.js";
 import {
+  type CommentId,
   generateId,
   type IssueId,
-  type PhotoId,
   type ProjectId,
   parseId,
   type UserId,
 } from "../../domain/valueObjects/brandedId.js";
-import { createPhoto } from "../../domain/valueObjects/photo.js";
 import { createSpatialPosition } from "../../domain/valueObjects/position.js";
 import { deleteIssueUseCase } from "./deleteIssueUseCase.js";
 
@@ -22,48 +21,26 @@ const actorId = parseId<UserId>("01ACTOR000000000000000ACTOR");
 const projectId = parseId<ProjectId>("01PROJ0000000000000000PROJ0");
 const reporterId = parseId<UserId>("01REPORTER00000000000REPORT");
 
-/** テスト用の Issue 状態を生成する（写真なし） */
+/** テスト用の Issue 状態を生成する */
 const makeIssue = () => {
   const result = createIssue({
     issueId: generateId<IssueId>(),
     projectId,
     title: "壁のひび割れ",
-    description: "3階東側の壁にひび割れを確認",
     category: "quality_defect" as const,
     position: createSpatialPosition(10, 20, 30),
     reporterId,
     assigneeId: null,
-    photos: [] as const,
     actorId,
+    comment: {
+      commentId: generateId<CommentId>(),
+      body: "3階東側の壁にひび割れを確認",
+    },
   });
   if (!result.ok) throw new Error("createIssue failed");
-  return applyEvent(null, result.value);
-};
-
-/** テスト用の Issue 状態を生成する（写真あり） */
-const makeIssueWithPhotos = () => {
-  const result = createIssue({
-    issueId: generateId<IssueId>(),
-    projectId,
-    title: "壁のひび割れ",
-    description: "3階東側の壁にひび割れを確認",
-    category: "quality_defect" as const,
-    position: createSpatialPosition(10, 20, 30),
-    reporterId,
-    assigneeId: null,
-    photos: [
-      createPhoto({
-        id: parseId<PhotoId>("01PHOTO000000000000000PHOTO"),
-        fileName: "photo1.jpg",
-        storagePath: "confirmed/issue1/before/photo1.jpg",
-        phase: "before",
-        uploadedAt: new Date("2026-01-01T00:00:00Z"),
-      }),
-    ],
-    actorId,
-  });
-  if (!result.ok) throw new Error("createIssue failed");
-  return applyEvent(null, result.value);
+  const [createdEvent, commentEvent] = result.value;
+  const state = applyEvent(null, createdEvent);
+  return applyEvent(state, commentEvent);
 };
 
 /** IssueRepository のモック生成 */
@@ -94,21 +71,8 @@ const createMockBlobStorage = (
 // ---------------------------------------------------------------------------
 
 describe("deleteIssueUseCase", () => {
-  it("正常系: 指摘を削除する（写真なし）", async () => {
+  it("正常系: 指摘を削除する", async () => {
     const issue = makeIssue();
-    const repo = createMockRepo({ load: vi.fn().mockResolvedValue(issue) });
-    const blobStorage = createMockBlobStorage();
-    const useCase = deleteIssueUseCase(repo, blobStorage);
-
-    const result = await useCase({ issueId: issue.id });
-
-    expect(result.ok).toBe(true);
-    expect(blobStorage.deleteByIssue).toHaveBeenCalledWith(issue.id);
-    expect(repo.delete).toHaveBeenCalledWith(issue.id);
-  });
-
-  it("正常系: 写真がある指摘を削除する（Blob も削除される）", async () => {
-    const issue = makeIssueWithPhotos();
     const repo = createMockRepo({ load: vi.fn().mockResolvedValue(issue) });
     const blobStorage = createMockBlobStorage();
     const useCase = deleteIssueUseCase(repo, blobStorage);

@@ -8,11 +8,11 @@
 
 import type { BlobStorage } from "../../domain/services/blobStorage.js";
 import {
+  type CommentId,
   generateId,
   type IssueId,
   type PhotoId,
 } from "../../domain/valueObjects/brandedId.js";
-import type { PhotoPhase } from "../../domain/valueObjects/photo.js";
 import type {
   DomainErrorDetail,
   Result,
@@ -22,8 +22,8 @@ import { err } from "../../domain/valueObjects/result.js";
 /** ユースケースの入力型。 */
 export type GeneratePhotoUploadUrlInput = {
   readonly issueId: IssueId;
+  readonly commentId: CommentId;
   readonly fileName: string;
-  readonly phase: PhotoPhase;
 };
 
 /** ユースケースの出力型。 */
@@ -48,9 +48,9 @@ export const generatePhotoUploadUrlUseCase =
     try {
       const { uploadUrl } = await blobStorage.generateUploadUrl(
         input.issueId,
+        input.commentId,
         photoId,
         input.fileName,
-        input.phase,
       );
 
       return { ok: true, value: { photoId, uploadUrl } };

@@ -45,6 +45,7 @@ describe("issueRepositoryImpl（結合テスト）", () => {
     expect(issue?.title).toBe("テスト指摘");
     expect(issue?.status).toBe("open");
     expect(issue?.version).toBe(1);
+    expect(issue?.comments).toEqual([]);
   });
 
   it("複数イベントの適用で最新状態が復元される", async () => {

@@ -4,9 +4,11 @@ import type {
   IssueQueryService,
 } from "../../domain/repositories/issueQueryService.js";
 import {
+  type CommentId,
   type IssueId,
   type ProjectId,
   parseId,
+  type UserId,
 } from "../../domain/valueObjects/brandedId.js";
 import { createSpatialPosition } from "../../domain/valueObjects/position.js";
 import { getIssueDetailUseCase } from "./getIssueDetailUseCase.js";
@@ -27,12 +29,17 @@ const createMockDetail = (overrides?: Partial<IssueDetail>): IssueDetail => ({
   reporterName: "山田太郎",
   assigneeName: null,
   position: createSpatialPosition(10, 20, 30),
-  photoCount: 0,
   createdAt: new Date("2026-01-01"),
   updatedAt: new Date("2026-01-01"),
-  description: "3階東側の壁にひび割れを確認",
-  photos: [],
-  recentComments: [],
+  recentComments: [
+    {
+      commentId: parseId<CommentId>("01COMMENT0000000000000COMM0"),
+      body: "確認しました",
+      actorId: parseId<UserId>("01ACTOR000000000000000ACTOR"),
+      attachments: [],
+      createdAt: new Date("2026-01-01"),
+    },
+  ],
   ...overrides,
 });
 

@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { type CommentId, generateId, type UserId } from "./brandedId.js";
-import { COMMENT_MAX_LENGTH, createComment } from "./comment.js";
+import {
+  type CommentId,
+  generateId,
+  type PhotoId,
+  type UserId,
+} from "./brandedId.js";
+import {
+  COMMENT_MAX_ATTACHMENTS,
+  COMMENT_MAX_LENGTH,
+  createComment,
+} from "./comment.js";
+import { createPhoto } from "./photo.js";
 
 const actorId = generateId<UserId>();
 
@@ -39,5 +49,55 @@ describe("createComment（値オブジェクト）", () => {
       createdAt: new Date(),
     });
     expect(comment.body).toBe(body);
+  });
+
+  it("attachments 省略時は空配列になる", () => {
+    const comment = createComment({
+      commentId: generateId<CommentId>(),
+      body: "本文",
+      actorId,
+      createdAt: new Date(),
+    });
+    expect(comment.attachments).toEqual([]);
+    expect(comment.attachments).toHaveLength(0);
+  });
+
+  it("attachments に写真を渡すと保持される", () => {
+    const photo = createPhoto({
+      id: generateId<PhotoId>(),
+      fileName: "crack.jpg",
+      storagePath: "confirmed/xxx/cmt/yyy.jpg",
+      uploadedAt: new Date(),
+    });
+    const comment = createComment({
+      commentId: generateId<CommentId>(),
+      body: "写真付き",
+      actorId,
+      attachments: [photo],
+      createdAt: new Date(),
+    });
+    expect(comment.attachments).toHaveLength(1);
+    expect(comment.attachments[0].fileName).toBe("crack.jpg");
+  });
+
+  it("attachments 配列は凍結されている", () => {
+    const photo = createPhoto({
+      id: generateId<PhotoId>(),
+      fileName: "crack.jpg",
+      storagePath: "confirmed/xxx/cmt/yyy.jpg",
+      uploadedAt: new Date(),
+    });
+    const comment = createComment({
+      commentId: generateId<CommentId>(),
+      body: "写真付き",
+      actorId,
+      attachments: [photo],
+      createdAt: new Date(),
+    });
+    expect(Object.isFrozen(comment.attachments)).toBe(true);
+  });
+
+  it("COMMENT_MAX_ATTACHMENTS が 10 である", () => {
+    expect(COMMENT_MAX_ATTACHMENTS).toBe(10);
   });
 });

@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import type { BlobStorage } from "../../domain/services/blobStorage.js";
-import { type IssueId, parseId } from "../../domain/valueObjects/brandedId.js";
+import {
+  type CommentId,
+  generateId,
+  type IssueId,
+  parseId,
+} from "../../domain/valueObjects/brandedId.js";
 import { generatePhotoUploadUrlUseCase } from "./generatePhotoUploadUrlUseCase.js";
 
 // ---------------------------------------------------------------------------
@@ -8,6 +13,7 @@ import { generatePhotoUploadUrlUseCase } from "./generatePhotoUploadUrlUseCase.j
 // ---------------------------------------------------------------------------
 
 const issueId = parseId<IssueId>("019560a0-0000-7000-8000-000000000001");
+const commentId = generateId<CommentId>();
 
 // ---------------------------------------------------------------------------
 // モック
@@ -36,8 +42,8 @@ describe("generatePhotoUploadUrlUseCase", () => {
 
     const result = await useCase({
       issueId,
+      commentId,
       fileName: "crack.jpg",
-      phase: "before",
     });
 
     expect(result.ok).toBe(true);
@@ -50,29 +56,9 @@ describe("generatePhotoUploadUrlUseCase", () => {
 
     expect(blobStorage.generateUploadUrl).toHaveBeenCalledWith(
       issueId,
+      commentId,
       result.value.photoId,
       "crack.jpg",
-      "before",
-    );
-  });
-
-  it("phase: after でも正しく動作する", async () => {
-    const blobStorage = createMockBlobStorage();
-    const useCase = generatePhotoUploadUrlUseCase(blobStorage);
-
-    const result = await useCase({
-      issueId,
-      fileName: "fixed.png",
-      phase: "after",
-    });
-
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(blobStorage.generateUploadUrl).toHaveBeenCalledWith(
-      issueId,
-      result.value.photoId,
-      "fixed.png",
-      "after",
     );
   });
 });

@@ -34,20 +34,22 @@ export const serializeIssueListItem = (item: IssueListItem) => ({
   reporterName: item.reporterName,
   assigneeName: item.assigneeName,
   position: item.position,
-  photoCount: item.photoCount,
   createdAt: item.createdAt.toISOString(),
   updatedAt: item.updatedAt.toISOString(),
 });
 
 export const serializeIssueDetail = (detail: IssueDetail) => ({
   ...serializeIssueListItem(detail),
-  description: detail.description,
-  photos: detail.photos.map((p) => ({
-    id: uuidToBase62(p.id),
-    fileName: p.fileName,
-    storagePath: p.storagePath,
-    phase: p.phase,
-    uploadedAt: p.uploadedAt.toISOString(),
+  recentComments: detail.recentComments.map((c) => ({
+    commentId: uuidToBase62(c.commentId),
+    body: c.body,
+    actorId: uuidToBase62(c.actorId),
+    attachments: c.attachments.map((p) => ({
+      id: uuidToBase62(p.id),
+      fileName: p.fileName,
+      uploadedAt: p.uploadedAt.toISOString(),
+    })),
+    createdAt: c.createdAt.toISOString(),
   })),
 });
 

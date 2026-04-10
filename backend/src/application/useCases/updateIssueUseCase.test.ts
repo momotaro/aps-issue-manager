@@ -3,6 +3,7 @@ import type { Issue } from "../../domain/entities/issue.js";
 import { applyEvent, createIssue } from "../../domain/entities/issue.js";
 import type { IssueRepository } from "../../domain/repositories/issueRepository.js";
 import {
+  type CommentId,
   generateId,
   type IssueId,
   type ProjectId,
@@ -23,16 +24,21 @@ const makeIssue = (): Issue => {
     issueId: generateId<IssueId>(),
     projectId: "project-1" as ProjectId,
     title: "外壁タイルの浮き",
-    description: "北側外壁3階部分にタイルの浮きを確認",
     category: "quality_defect",
     position: createSpatialPosition(1.0, 2.0, 3.0),
     reporterId: actorId,
     assigneeId: null,
-    photos: [],
     actorId,
+    comment: {
+      commentId: generateId<CommentId>(),
+      body: "北側外壁3階部分にタイルの浮きを確認",
+    },
   });
   if (!result.ok) throw new Error("Failed to create test issue");
-  return applyEvent(null, result.value);
+  // createIssue returns [IssueCreatedEvent, CommentAddedEvent] — apply both
+  const [createdEvent, commentEvent] = result.value;
+  const state = applyEvent(null, createdEvent);
+  return applyEvent(state, commentEvent);
 };
 
 const mockIssueRepo = (
@@ -68,23 +74,6 @@ describe("updateIssueUseCase", () => {
       if (!result.ok) return;
       expect(result.value.events).toHaveLength(1);
       expect(result.value.events[0].type).toBe("IssueTitleUpdated");
-    });
-
-    it("説明を更新し、IssueDescriptionUpdated イベントを返す", async () => {
-      const issue = makeIssue();
-      const repo = mockIssueRepo(issue);
-      const useCase = updateIssueUseCase(repo);
-
-      const result = await useCase({
-        issueId: issue.id,
-        description: "新しい説明",
-        actorId,
-      });
-
-      expect(result.ok).toBe(true);
-      if (!result.ok) return;
-      expect(result.value.events).toHaveLength(1);
-      expect(result.value.events[0].type).toBe("IssueDescriptionUpdated");
     });
 
     it("種別を変更し、IssueCategoryChanged イベントを返す", async () => {
@@ -129,7 +118,6 @@ describe("updateIssueUseCase", () => {
       const result = await useCase({
         issueId: issue.id,
         title: "更新タイトル",
-        description: "更新説明",
         category: "safety_hazard",
         assigneeId: "user-2" as UserId,
         actorId,
@@ -137,11 +125,10 @@ describe("updateIssueUseCase", () => {
 
       expect(result.ok).toBe(true);
       if (!result.ok) return;
-      expect(result.value.events).toHaveLength(4);
+      expect(result.value.events).toHaveLength(3);
       expect(result.value.events[0].type).toBe("IssueTitleUpdated");
-      expect(result.value.events[1].type).toBe("IssueDescriptionUpdated");
-      expect(result.value.events[2].type).toBe("IssueCategoryChanged");
-      expect(result.value.events[3].type).toBe("IssueAssigneeChanged");
+      expect(result.value.events[1].type).toBe("IssueCategoryChanged");
+      expect(result.value.events[2].type).toBe("IssueAssigneeChanged");
     });
 
     it("複数イベントの version が正しくインクリメントされる", async () => {
@@ -152,7 +139,7 @@ describe("updateIssueUseCase", () => {
       const result = await useCase({
         issueId: issue.id,
         title: "更新タイトル",
-        description: "更新説明",
+        category: "safety_hazard",
         actorId,
       });
 

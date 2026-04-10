@@ -17,22 +17,22 @@ import type {
   IssueAssigneeChangedEvent,
   IssueCategoryChangedEvent,
   IssueCreatedEvent,
-  IssueDescriptionUpdatedEvent,
   IssueDomainEvent,
   IssueStatusChangedEvent,
   IssueTitleUpdatedEvent,
-  PhotoAddedEvent,
-  PhotoRemovedEvent,
 } from "../events/issueEvents.js";
 import type {
   CommentId,
   IssueId,
-  PhotoId,
   ProjectId,
   UserId,
 } from "../valueObjects/brandedId.js";
 import type { Comment } from "../valueObjects/comment.js";
-import { COMMENT_MAX_LENGTH, createComment } from "../valueObjects/comment.js";
+import {
+  COMMENT_MAX_ATTACHMENTS,
+  COMMENT_MAX_LENGTH,
+  createComment,
+} from "../valueObjects/comment.js";
 import type { IssueCategory } from "../valueObjects/issueCategory.js";
 import type { IssueStatus } from "../valueObjects/issueStatus.js";
 import { validateTransition } from "../valueObjects/issueStatus.js";
@@ -59,8 +59,6 @@ export type Issue = {
   readonly projectId: ProjectId;
   /** 指摘のタイトル。 */
   readonly title: string;
-  /** 指摘の詳細説明。 */
-  readonly description: string;
   /** 現在のステータス。 */
   readonly status: IssueStatus;
   /** 指摘の種別。 */
@@ -71,8 +69,6 @@ export type Issue = {
   readonly reporterId: UserId;
   /** 担当者の User ID。未割当の場合は `null`。 */
   readonly assigneeId: UserId | null;
-  /** 添付写真の一覧。 */
-  readonly photos: readonly Photo[];
   /**
    * コメントの一覧（全件）。
    *
@@ -113,13 +109,11 @@ export const applyEvent = (
       id: event.issueId,
       projectId: event.payload.projectId,
       title: event.payload.title,
-      description: event.payload.description,
       status: event.payload.status,
       category: event.payload.category,
       position: event.payload.position,
       reporterId: event.payload.reporterId,
       assigneeId: event.payload.assigneeId,
-      photos: Object.freeze([...event.payload.photos]),
       comments: Object.freeze([]),
       version: event.version,
       createdAt: event.occurredAt,
@@ -135,14 +129,6 @@ export const applyEvent = (
       return Object.freeze({
         ...current,
         title: event.payload.title,
-        version: event.version,
-        updatedAt: event.occurredAt,
-      });
-
-    case "IssueDescriptionUpdated":
-      return Object.freeze({
-        ...current,
-        description: event.payload.description,
         version: event.version,
         updatedAt: event.occurredAt,
       });
@@ -171,24 +157,6 @@ export const applyEvent = (
         updatedAt: event.occurredAt,
       });
 
-    case "PhotoAdded":
-      return Object.freeze({
-        ...current,
-        photos: Object.freeze([...current.photos, event.payload.photo]),
-        version: event.version,
-        updatedAt: event.occurredAt,
-      });
-
-    case "PhotoRemoved":
-      return Object.freeze({
-        ...current,
-        photos: Object.freeze(
-          current.photos.filter((p) => p.id !== event.payload.photoId),
-        ),
-        version: event.version,
-        updatedAt: event.occurredAt,
-      });
-
     case "CommentAdded":
       return Object.freeze({
         ...current,
@@ -196,6 +164,13 @@ export const applyEvent = (
         version: event.version,
         updatedAt: event.occurredAt,
       });
+
+    default: {
+      const _exhaustive: never = event;
+      throw new Error(
+        `Unknown issue event type: ${(_exhaustive as IssueDomainEvent).type}`,
+      );
+    }
   }
 };
 
@@ -240,45 +215,100 @@ export const rehydrateFromSnapshot = (
  *
  * @remarks
  * status は常に `"open"` で開始する。
- * タイトルが空の場合はエラーを返す。
+ * IssueCreatedEvent + CommentAddedEvent（初回コメント）の2イベントを生成する。
  *
  * @param params - 指摘の初期データ
- * @returns 成功時は `IssueCreatedEvent`、失敗時はエラー詳細
+ * @returns 成功時は `[IssueCreatedEvent, CommentAddedEvent]`、失敗時はエラー詳細
  */
 export const createIssue = (params: {
   issueId: IssueId;
   projectId: ProjectId;
   title: string;
-  description: string;
   category: IssueCategory;
   position: Position;
   reporterId: UserId;
   assigneeId: UserId | null;
-  photos: readonly Photo[];
   actorId: UserId;
-}): Result<IssueCreatedEvent, DomainErrorDetail> => {
+  comment: {
+    commentId: CommentId;
+    body: string;
+    attachments?: readonly Photo[];
+  };
+}): Result<
+  readonly [IssueCreatedEvent, CommentAddedEvent],
+  DomainErrorDetail
+> => {
   if (params.title.trim().length === 0) {
     return err({ code: "EMPTY_TITLE", message: "Title must not be empty" });
   }
 
-  const meta = createEventMeta(params.issueId, params.actorId, 1);
+  const body = params.comment.body.trim();
+  if (body.length === 0) {
+    return err({
+      code: "EMPTY_COMMENT",
+      message: "Comment body must not be empty",
+    });
+  }
+  if (body.length > COMMENT_MAX_LENGTH) {
+    return err({
+      code: "BODY_TOO_LONG",
+      message: `Comment body must not exceed ${COMMENT_MAX_LENGTH} characters`,
+    });
+  }
+  if (
+    params.comment.attachments &&
+    params.comment.attachments.length > COMMENT_MAX_ATTACHMENTS
+  ) {
+    return err({
+      code: "TOO_MANY_ATTACHMENTS",
+      message: `Attachments must not exceed ${COMMENT_MAX_ATTACHMENTS}`,
+    });
+  }
+
+  // IssueCreatedEvent (version = 1)
+  const createdMeta = createEventMeta(params.issueId, params.actorId, 1);
+  const createdEvent: IssueCreatedEvent = Object.freeze({
+    ...createdMeta,
+    type: "IssueCreated" as const,
+    payload: Object.freeze({
+      projectId: params.projectId,
+      title: params.title.trim(),
+      status: "open" as const,
+      category: params.category,
+      position: params.position,
+      reporterId: params.reporterId,
+      assigneeId: params.assigneeId,
+    }),
+  });
+
+  // applyEvent で中間状態を作成し、version を進める
+  const intermediateState = applyEvent(null, createdEvent);
+
+  // CommentAddedEvent (version = 2)
+  const commentMeta = createEventMeta(
+    params.issueId,
+    params.actorId,
+    intermediateState.version + 1,
+  );
+  const comment = createComment({
+    commentId: params.comment.commentId,
+    body,
+    actorId: params.actorId,
+    attachments: params.comment.attachments,
+    createdAt: commentMeta.occurredAt,
+  });
+
+  const commentEvent: CommentAddedEvent = Object.freeze({
+    ...commentMeta,
+    type: "CommentAdded" as const,
+    payload: Object.freeze({ comment }),
+  });
 
   return ok(
-    Object.freeze({
-      ...meta,
-      type: "IssueCreated" as const,
-      payload: Object.freeze({
-        projectId: params.projectId,
-        title: params.title.trim(),
-        description: params.description,
-        status: "open" as const,
-        category: params.category,
-        position: params.position,
-        reporterId: params.reporterId,
-        assigneeId: params.assigneeId,
-        photos: Object.freeze([...params.photos]),
-      }),
-    }),
+    Object.freeze([createdEvent, commentEvent]) as readonly [
+      IssueCreatedEvent,
+      CommentAddedEvent,
+    ],
   );
 };
 
@@ -341,32 +371,6 @@ export const updateTitle = (
 };
 
 /**
- * 指摘の説明を更新するコマンド。
- *
- * @param issue - 現在の Issue 状態
- * @param description - 新しい説明
- * @param actorId - 操作者の User ID
- * @returns 成功時は `IssueDescriptionUpdatedEvent`、失敗時はエラー詳細
- */
-export const updateDescription = (
-  issue: Issue,
-  description: string,
-  actorId: UserId,
-): Result<IssueDescriptionUpdatedEvent, DomainErrorDetail> => {
-  if (description === issue.description) {
-    return err({ code: "NO_CHANGE", message: "Description is unchanged" });
-  }
-
-  return ok(
-    Object.freeze({
-      ...createEventMeta(issue.id, actorId, issue.version + 1),
-      type: "IssueDescriptionUpdated" as const,
-      payload: Object.freeze({ description }),
-    }),
-  );
-};
-
-/**
  * 指摘の種別を変更するコマンド。
  *
  * @param issue - 現在の Issue 状態
@@ -422,36 +426,6 @@ export const changeAssignee = (
 };
 
 /**
- * 指摘に写真を追加するコマンド。
- *
- * @param issue - 現在の Issue 状態
- * @param photo - 追加する写真
- * @param actorId - 操作者の User ID
- * @returns 成功時は `PhotoAddedEvent`、失敗時はエラー詳細
- */
-export const addPhoto = (
-  issue: Issue,
-  photo: Photo,
-  actorId: UserId,
-): Result<PhotoAddedEvent, DomainErrorDetail> => {
-  const duplicate = issue.photos.some((p) => p.id === photo.id);
-  if (duplicate) {
-    return err({
-      code: "DUPLICATE_PHOTO",
-      message: `Photo ${photo.id} already exists`,
-    });
-  }
-
-  return ok(
-    Object.freeze({
-      ...createEventMeta(issue.id, actorId, issue.version + 1),
-      type: "PhotoAdded" as const,
-      payload: Object.freeze({ photo }),
-    }),
-  );
-};
-
-/**
  * 指摘にコメントを追加するコマンド。
  *
  * @remarks
@@ -462,6 +436,7 @@ export const addPhoto = (
  * @param commentId - 新しいコメントの ID
  * @param body - コメント本文
  * @param actorId - 操作者の User ID
+ * @param attachments - 添付写真（オプション）
  * @returns 成功時は `CommentAddedEvent`、失敗時はエラー詳細
  */
 export const addComment = (
@@ -469,6 +444,7 @@ export const addComment = (
   commentId: CommentId,
   body: string,
   actorId: UserId,
+  attachments?: readonly Photo[],
 ): Result<CommentAddedEvent, DomainErrorDetail> => {
   if (body.trim().length === 0) {
     return err({
@@ -483,12 +459,25 @@ export const addComment = (
       message: `Comment body must not exceed ${COMMENT_MAX_LENGTH} characters`,
     });
   }
+  if (attachments && attachments.length > COMMENT_MAX_ATTACHMENTS) {
+    return err({
+      code: "TOO_MANY_ATTACHMENTS",
+      message: `Attachments must not exceed ${COMMENT_MAX_ATTACHMENTS}`,
+    });
+  }
+  if (issue.comments.some((existing) => existing.commentId === commentId)) {
+    return err({
+      code: "DUPLICATE_COMMENT",
+      message: `Comment with the same id already exists: ${commentId}`,
+    });
+  }
 
   const meta = createEventMeta(issue.id, actorId, issue.version + 1);
   const comment = createComment({
     commentId,
     body: body.trim(),
     actorId,
+    attachments,
     createdAt: meta.occurredAt,
   });
 
@@ -497,36 +486,6 @@ export const addComment = (
       ...meta,
       type: "CommentAdded" as const,
       payload: Object.freeze({ comment }),
-    }),
-  );
-};
-
-/**
- * 指摘から写真を削除するコマンド。
- *
- * @param issue - 現在の Issue 状態
- * @param photoId - 削除する写真の ID
- * @param actorId - 操作者の User ID
- * @returns 成功時は `PhotoRemovedEvent`、失敗時はエラー詳細
- */
-export const removePhoto = (
-  issue: Issue,
-  photoId: PhotoId,
-  actorId: UserId,
-): Result<PhotoRemovedEvent, DomainErrorDetail> => {
-  const exists = issue.photos.some((p) => p.id === photoId);
-  if (!exists) {
-    return err({
-      code: "PHOTO_NOT_FOUND",
-      message: `Photo ${photoId} not found`,
-    });
-  }
-
-  return ok(
-    Object.freeze({
-      ...createEventMeta(issue.id, actorId, issue.version + 1),
-      type: "PhotoRemoved" as const,
-      payload: Object.freeze({ photoId }),
     }),
   );
 };

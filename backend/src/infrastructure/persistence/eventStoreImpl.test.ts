@@ -77,6 +77,57 @@ describe("eventStoreImpl（結合テスト）", () => {
     expect(events).toHaveLength(0);
   });
 
+  // --- CommentAdded の日付復元 ---
+
+  it("CommentAdded イベントの comment.createdAt と attachments[].uploadedAt が Date に復元される", async () => {
+    const created = makeIssueCreatedEvent();
+    const issueId = created.issueId;
+    await eventStore.append(issueId, [created], 0);
+
+    const { createEventMeta } = await import(
+      "../../domain/events/eventMeta.js"
+    );
+    const { generateId: genId } = await import(
+      "../../domain/valueObjects/brandedId.js"
+    );
+    const { createComment } = await import(
+      "../../domain/valueObjects/comment.js"
+    );
+    const { createPhoto } = await import("../../domain/valueObjects/photo.js");
+    const { testActorId } = await import("./testFixtures.js");
+
+    const meta = createEventMeta(issueId, testActorId, 2);
+    const photo = createPhoto({
+      id: genId(),
+      fileName: "test.jpg",
+      storagePath: "confirmed/xxx/cmt/photo.jpg",
+      uploadedAt: new Date("2026-01-15T10:00:00Z"),
+    });
+    const comment = createComment({
+      commentId: genId(),
+      body: "日付復元テスト",
+      actorId: testActorId,
+      attachments: [photo],
+      createdAt: meta.occurredAt,
+    });
+    const commentEvent = Object.freeze({
+      ...meta,
+      type: "CommentAdded" as const,
+      payload: Object.freeze({ comment }),
+    });
+    await eventStore.append(issueId, [commentEvent], 1);
+
+    const events = await eventStore.getEvents(issueId);
+    const restored = events[1];
+    expect(restored.type).toBe("CommentAdded");
+    if (restored.type === "CommentAdded") {
+      expect(restored.payload.comment.createdAt).toBeInstanceOf(Date);
+      expect(restored.payload.comment.attachments[0].uploadedAt).toBeInstanceOf(
+        Date,
+      );
+    }
+  });
+
   // --- 異常系 ---
 
   it("version 競合時に ConcurrencyError をスローする", async () => {
