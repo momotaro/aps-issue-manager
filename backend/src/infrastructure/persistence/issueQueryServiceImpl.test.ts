@@ -72,7 +72,6 @@ describe("issueQueryServiceImpl（結合テスト）", () => {
     expect(detail?.title).toBe("テスト指摘");
     expect(detail?.reporterName).toBe("報告者");
     expect(detail?.assigneeName).toBeNull();
-    expect(detail?.description).toBe("テスト用の指摘です");
   });
 
   it("findAll でフィルタなし全件取得できる", async () => {
@@ -198,6 +197,7 @@ describe("issueQueryServiceImpl（結合テスト）", () => {
       commentId: generateId<CommentId>(),
       body: "テストコメント",
       actorId: testActorId,
+      attachments: [],
       createdAt: meta.occurredAt,
     });
     const commentEvent: IssueDomainEvent = {
@@ -210,6 +210,7 @@ describe("issueQueryServiceImpl（結合テスト）", () => {
     const detail = await queryService.findById(event.issueId);
     expect(detail?.recentComments).toHaveLength(1);
     expect(detail?.recentComments[0].body).toBe("テストコメント");
+    expect(detail?.recentComments[0].attachments).toEqual([]);
   });
 
   it("findById で recentComments[*].createdAt が Date 型である", async () => {
@@ -219,6 +220,7 @@ describe("issueQueryServiceImpl（結合テスト）", () => {
       commentId: generateId<CommentId>(),
       body: "日付テスト",
       actorId: testActorId,
+      attachments: [],
       createdAt: meta.occurredAt,
     });
     const commentEvent: IssueDomainEvent = {

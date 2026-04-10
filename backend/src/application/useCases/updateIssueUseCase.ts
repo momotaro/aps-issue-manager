@@ -2,7 +2,7 @@
  * 指摘の基本情報更新ユースケース。
  *
  * @remarks
- * タイトル・説明・種別・担当者の変更をコマンド関数経由で実行し、
+ * タイトル・種別・担当者の変更をコマンド関数経由で実行し、
  * 生成されたイベントをまとめて IssueRepository に保存する。
  * 高階関数 DI パターンで IssueRepository を注入する。
  */
@@ -12,7 +12,6 @@ import {
   applyEvent,
   changeAssignee,
   changeCategory,
-  updateDescription,
   updateTitle,
 } from "../../domain/entities/issue.js";
 import type { IssueDomainEvent } from "../../domain/events/issueEvents.js";
@@ -34,7 +33,6 @@ import { err } from "../../domain/valueObjects/result.js";
 export type UpdateIssueInput = {
   readonly issueId: IssueId;
   readonly title?: string;
-  readonly description?: string;
   readonly category?: IssueCategory;
   readonly assigneeId?: UserId | null;
   readonly actorId: UserId;
@@ -79,18 +77,6 @@ export const updateIssueUseCase =
     // タイトル更新
     if (input.title !== undefined) {
       const result = updateTitle(current, input.title, input.actorId);
-      if (!result.ok) return result;
-      events.push(result.value);
-      current = applyEvent(current, result.value);
-    }
-
-    // 説明更新
-    if (input.description !== undefined) {
-      const result = updateDescription(
-        current,
-        input.description,
-        input.actorId,
-      );
       if (!result.ok) return result;
       events.push(result.value);
       current = applyEvent(current, result.value);

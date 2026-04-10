@@ -1,31 +1,24 @@
 /**
- * 指摘の新規登録ユースケース。
+ * コメント追加ユースケース。
  *
  * @remarks
- * ドメインの `createIssue` コマンド関数を呼び出し、
- * 生成された2イベント（IssueCreated + CommentAdded）を IssueRepository に保存する。
+ * ステータス遷移なしでコメント（写真添付可）を追加する汎用ユースケース。
+ * 質問・回答・補足説明など、ステータス遷移を伴わないコミュニケーションに使用する。
  * 写真添付時は confirmed パスを計算してイベントに記録し、Blob は後から移動する。
- * 高階関数 DI パターンで IssueRepository + BlobStorage を注入する。
  */
 
-import { createIssue } from "../../domain/entities/issue.js";
-import type {
-  CommentAddedEvent,
-  IssueCreatedEvent,
-} from "../../domain/events/issueEvents.js";
+import { addComment } from "../../domain/entities/issue.js";
+import type { CommentAddedEvent } from "../../domain/events/issueEvents.js";
 import type { IssueRepository } from "../../domain/repositories/issueRepository.js";
 import type { BlobStorage } from "../../domain/services/blobStorage.js";
 import { ConcurrencyError } from "../../domain/services/errors.js";
 import type {
   CommentId,
   IssueId,
-  ProjectId,
   UserId,
 } from "../../domain/valueObjects/brandedId.js";
-import type { IssueCategory } from "../../domain/valueObjects/issueCategory.js";
 import type { Photo } from "../../domain/valueObjects/photo.js";
 import { confirmedBlobPath } from "../../domain/valueObjects/photo.js";
-import type { Position } from "../../domain/valueObjects/position.js";
 import type {
   DomainErrorDetail,
   Result,
@@ -36,15 +29,10 @@ import { err } from "../../domain/valueObjects/result.js";
 // 入力型
 // ---------------------------------------------------------------------------
 
-/** createIssueUseCase の入力。 */
-export type CreateIssueInput = {
+/** addCommentUseCase の入力。 */
+export type AddCommentInput = {
   readonly issueId: IssueId;
-  readonly projectId: ProjectId;
-  readonly title: string;
-  readonly category: IssueCategory;
-  readonly position: Position;
-  readonly reporterId: UserId;
-  readonly assigneeId?: UserId | null;
+  readonly actorId: UserId;
   readonly comment: {
     readonly commentId: CommentId;
     readonly body: string;
@@ -56,10 +44,9 @@ export type CreateIssueInput = {
 // 出力型
 // ---------------------------------------------------------------------------
 
-/** createIssueUseCase の成功時の戻り値。 */
-export type CreateIssueOutput = {
-  readonly issueId: IssueId;
-  readonly events: readonly [IssueCreatedEvent, CommentAddedEvent];
+/** addCommentUseCase の成功時の戻り値。 */
+export type AddCommentOutput = {
+  readonly event: CommentAddedEvent;
 };
 
 // ---------------------------------------------------------------------------
@@ -67,48 +54,45 @@ export type CreateIssueOutput = {
 // ---------------------------------------------------------------------------
 
 /**
- * 指摘を新規登録するユースケース。
+ * コメント追加ユースケースを生成する高階関数。
  *
  * @param issueRepo - IssueRepository の実装
  * @param blobStorage - BlobStorage の実装
- * @returns 入力を受け取り、指摘を作成して保存する非同期関数
+ * @returns コメント追加を実行する非同期関数
  */
-export const createIssueUseCase =
+export const addCommentUseCase =
   (issueRepo: IssueRepository, blobStorage: BlobStorage) =>
   async (
-    input: CreateIssueInput,
-  ): Promise<Result<CreateIssueOutput, DomainErrorDetail>> => {
-    // 添付写真を confirmed パスに変換
+    input: AddCommentInput,
+  ): Promise<Result<AddCommentOutput, DomainErrorDetail>> => {
+    const issue = await issueRepo.load(input.issueId);
+    if (issue === null) {
+      return err({
+        code: "ISSUE_NOT_FOUND",
+        message: `Issue not found: ${input.issueId}`,
+      });
+    }
+
+    // 添付写真を confirmed パスに変換してイベントに記録する
     const { confirmedAttachments, pendingPhotos } = resolveAttachments(
       input.issueId,
       input.comment.commentId,
       input.comment.attachments,
     );
 
-    // ドメインコマンドで IssueCreated + CommentAdded イベントを生成
-    const result = createIssue({
-      issueId: input.issueId,
-      projectId: input.projectId,
-      title: input.title,
-      category: input.category,
-      position: input.position,
-      reporterId: input.reporterId,
-      assigneeId: input.assigneeId ?? null,
-      actorId: input.reporterId,
-      comment: {
-        commentId: input.comment.commentId,
-        body: input.comment.body,
-        attachments: confirmedAttachments,
-      },
-    });
+    const commentResult = addComment(
+      issue,
+      input.comment.commentId,
+      input.comment.body,
+      input.actorId,
+      confirmedAttachments,
+    );
+    if (!commentResult.ok) return commentResult;
 
-    if (!result.ok) return result;
-
-    const events = result.value;
+    const event = commentResult.value;
 
     try {
-      // version 0 = 新規集約（最初のイベントの version は 1、2つ目は 2）
-      await issueRepo.save(events[0].issueId, events, 0);
+      await issueRepo.save(input.issueId, [event], issue.version);
     } catch (error) {
       if (error instanceof ConcurrencyError) {
         return err({ code: "CONCURRENCY_CONFLICT", message: error.message });
@@ -131,11 +115,12 @@ export const createIssueUseCase =
       }
     }
 
-    return { ok: true, value: { issueId: events[0].issueId, events } };
+    return { ok: true, value: { event } };
   };
 
 /**
  * pending パスの添付写真を confirmed パスに変換する。
+ * イベントには confirmed パスを記録し、Blob 移動用に pending Photo を返す。
  */
 const resolveAttachments = (
   issueId: IssueId,

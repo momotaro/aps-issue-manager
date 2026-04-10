@@ -28,7 +28,6 @@ const createMockItem = (overrides?: Partial<IssueListItem>): IssueListItem => ({
   reporterName: "山田太郎",
   assigneeName: null,
   position: createSpatialPosition(10, 20, 30),
-  photoCount: 0,
   createdAt: new Date("2026-01-01"),
   updatedAt: new Date("2026-01-01"),
   ...overrides,

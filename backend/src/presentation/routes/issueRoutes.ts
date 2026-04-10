@@ -1,14 +1,14 @@
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
-import { changeIssueStatusUseCase } from "../../application/useCases/changeIssueStatusUseCase.js";
-import { confirmPhotoUploadUseCase } from "../../application/useCases/confirmPhotoUploadUseCase.js";
+import { addCommentUseCase } from "../../application/useCases/addCommentUseCase.js";
+import { correctIssueUseCase } from "../../application/useCases/correctIssueUseCase.js";
 import { createIssueUseCase } from "../../application/useCases/createIssueUseCase.js";
 import { deleteIssueUseCase } from "../../application/useCases/deleteIssueUseCase.js";
 import { generatePhotoUploadUrlUseCase } from "../../application/useCases/generatePhotoUploadUrlUseCase.js";
 import { getIssueDetailUseCase } from "../../application/useCases/getIssueDetailUseCase.js";
 import { getIssueHistoryUseCase } from "../../application/useCases/getIssueHistoryUseCase.js";
 import { getIssuesUseCase } from "../../application/useCases/getIssuesUseCase.js";
-import { removePhotoUseCase } from "../../application/useCases/removePhotoUseCase.js";
+import { reviewIssueUseCase } from "../../application/useCases/reviewIssueUseCase.js";
 import { updateIssueUseCase } from "../../application/useCases/updateIssueUseCase.js";
 import {
   blobStorage,
@@ -16,23 +16,26 @@ import {
   issueRepository,
 } from "../../compositionRoot.js";
 import type {
+  CommentId,
   IssueId,
   PhotoId,
   ProjectId,
   UserId,
 } from "../../domain/valueObjects/brandedId.js";
-import { parseId } from "../../domain/valueObjects/brandedId.js";
+import { generateId, parseId } from "../../domain/valueObjects/brandedId.js";
+import type { Photo } from "../../domain/valueObjects/photo.js";
 import { mapResultErrorToStatus } from "../middleware/errorHandler.js";
 import {
+  addCommentBodySchema,
   changeStatusBodySchema,
-  confirmPhotoBodySchema,
+  correctBodySchema,
   createIssueBodySchema,
   generateUploadUrlBodySchema,
   issueFiltersQuerySchema,
-  removePhotoBodySchema,
+  reviewBodySchema,
   updateAssigneeBodySchema,
   updateCategoryBodySchema,
-  updateDescriptionBodySchema,
+  updateIssueBodySchema,
   updateTitleBodySchema,
 } from "../schemas/issueSchemas.js";
 import { base62ToUuid, uuidToBase62 } from "../serializers/externalId.js";
@@ -42,16 +45,34 @@ import {
   serializeIssueListItem,
 } from "../serializers/responseSerializers.js";
 
-const createIssue = createIssueUseCase(issueRepository);
+const createIssue = createIssueUseCase(issueRepository, blobStorage);
 const getIssues = getIssuesUseCase(issueQueryService);
 const getIssueDetail = getIssueDetailUseCase(issueQueryService);
 const getIssueHistory = getIssueHistoryUseCase(issueQueryService);
 const updateIssue = updateIssueUseCase(issueRepository);
-const changeStatus = changeIssueStatusUseCase(issueRepository);
 const deleteIssue = deleteIssueUseCase(issueRepository, blobStorage);
 const generateUploadUrl = generatePhotoUploadUrlUseCase(blobStorage);
-const confirmPhoto = confirmPhotoUploadUseCase(issueRepository, blobStorage);
-const removePhoto = removePhotoUseCase(issueRepository, blobStorage);
+const correctIssue = correctIssueUseCase(issueRepository, blobStorage);
+const reviewIssue = reviewIssueUseCase(issueRepository);
+const addComment = addCommentUseCase(issueRepository, blobStorage);
+
+/** base62 の attachments をドメイン Photo に変換する。 */
+const parseAttachments = (
+  attachments?: Array<{
+    id: string;
+    fileName: string;
+    storagePath: string;
+    uploadedAt: string;
+  }>,
+): readonly Photo[] | undefined => {
+  if (!attachments || attachments.length === 0) return undefined;
+  return attachments.map((a) => ({
+    id: parseId<PhotoId>(base62ToUuid(a.id)),
+    fileName: a.fileName,
+    storagePath: a.storagePath,
+    uploadedAt: new Date(a.uploadedAt),
+  }));
+};
 
 export const issueRoutes = new Hono()
   .post("/", zValidator("json", createIssueBodySchema), async (c) => {
@@ -60,13 +81,17 @@ export const issueRoutes = new Hono()
       issueId: parseId<IssueId>(base62ToUuid(body.issueId)),
       projectId: parseId<ProjectId>(base62ToUuid(body.projectId)),
       title: body.title,
-      description: body.description,
       category: body.category,
       position: body.position,
       reporterId: parseId<UserId>(base62ToUuid(body.reporterId)),
       assigneeId: body.assigneeId
         ? parseId<UserId>(base62ToUuid(body.assigneeId))
         : null,
+      comment: {
+        commentId: parseId<CommentId>(base62ToUuid(body.comment.commentId)),
+        body: body.comment.body,
+        attachments: parseAttachments(body.comment.attachments),
+      },
     });
     if (!result.ok)
       return c.json(
@@ -113,6 +138,29 @@ export const issueRoutes = new Hono()
       );
     return c.json(serializeIssueDetail(result.value));
   })
+  // --- 基本情報一括更新 ---
+  .put("/:id", zValidator("json", updateIssueBodySchema), async (c) => {
+    const issueId = parseId<IssueId>(base62ToUuid(c.req.param("id")));
+    const body = c.req.valid("json");
+    const result = await updateIssue({
+      issueId,
+      ...(body.title !== undefined && { title: body.title }),
+      ...(body.category !== undefined && { category: body.category }),
+      ...(body.assigneeId !== undefined && {
+        assigneeId: body.assigneeId
+          ? parseId<UserId>(base62ToUuid(body.assigneeId))
+          : null,
+      }),
+      actorId: parseId<UserId>(base62ToUuid(body.actorId)),
+    });
+    if (!result.ok)
+      return c.json(
+        { error: result.error },
+        mapResultErrorToStatus(result.error.code),
+      );
+    return c.json({ ok: true });
+  })
+  // --- レガシー個別更新（#34 でフロント移行後に削除） ---
   .put("/:id/title", zValidator("json", updateTitleBodySchema), async (c) => {
     const issueId = parseId<IssueId>(base62ToUuid(c.req.param("id")));
     const body = c.req.valid("json");
@@ -128,25 +176,6 @@ export const issueRoutes = new Hono()
       );
     return c.json({ ok: true });
   })
-  .put(
-    "/:id/description",
-    zValidator("json", updateDescriptionBodySchema),
-    async (c) => {
-      const issueId = parseId<IssueId>(base62ToUuid(c.req.param("id")));
-      const body = c.req.valid("json");
-      const result = await updateIssue({
-        issueId,
-        description: body.description,
-        actorId: parseId<UserId>(base62ToUuid(body.actorId)),
-      });
-      if (!result.ok)
-        return c.json(
-          { error: result.error },
-          mapResultErrorToStatus(result.error.code),
-        );
-      return c.json({ ok: true });
-    },
-  )
   .put(
     "/:id/category",
     zValidator("json", updateCategoryBodySchema),
@@ -187,6 +216,94 @@ export const issueRoutes = new Hono()
       return c.json({ ok: true });
     },
   )
+  // --- レガシーステータス変更（#34 でフロント移行後に削除） ---
+  .post(
+    "/:id/status",
+    zValidator("json", changeStatusBodySchema),
+    async (c) => {
+      const issueId = parseId<IssueId>(base62ToUuid(c.req.param("id")));
+      const body = c.req.valid("json");
+      // correct/review に統合されたが、レガシー互換のため reviewIssueUseCase で代替
+      const result = await reviewIssue({
+        issueId,
+        status: body.status,
+        actorId: parseId<UserId>(base62ToUuid(body.actorId)),
+        comment: {
+          commentId: generateId<CommentId>(),
+          body: `ステータスを ${body.status} に変更`,
+        },
+      });
+      if (!result.ok)
+        return c.json(
+          { error: result.error },
+          mapResultErrorToStatus(result.error.code),
+        );
+      return c.json({ ok: true });
+    },
+  )
+  // --- ユースケース指向エンドポイント ---
+  .post("/:id/correct", zValidator("json", correctBodySchema), async (c) => {
+    const issueId = parseId<IssueId>(base62ToUuid(c.req.param("id")));
+    const body = c.req.valid("json");
+    const result = await correctIssue({
+      issueId,
+      status: body.status,
+      actorId: parseId<UserId>(base62ToUuid(body.actorId)),
+      comment: {
+        commentId: parseId<CommentId>(base62ToUuid(body.comment.commentId)),
+        body: body.comment.body,
+        attachments: parseAttachments(body.comment.attachments),
+      },
+    });
+    if (!result.ok)
+      return c.json(
+        { error: result.error },
+        mapResultErrorToStatus(result.error.code),
+      );
+    return c.json({ ok: true });
+  })
+  .post("/:id/review", zValidator("json", reviewBodySchema), async (c) => {
+    const issueId = parseId<IssueId>(base62ToUuid(c.req.param("id")));
+    const body = c.req.valid("json");
+    const result = await reviewIssue({
+      issueId,
+      status: body.status,
+      actorId: parseId<UserId>(base62ToUuid(body.actorId)),
+      comment: {
+        commentId: parseId<CommentId>(base62ToUuid(body.comment.commentId)),
+        body: body.comment.body,
+      },
+    });
+    if (!result.ok)
+      return c.json(
+        { error: result.error },
+        mapResultErrorToStatus(result.error.code),
+      );
+    return c.json({ ok: true });
+  })
+  .post(
+    "/:id/comments",
+    zValidator("json", addCommentBodySchema),
+    async (c) => {
+      const issueId = parseId<IssueId>(base62ToUuid(c.req.param("id")));
+      const body = c.req.valid("json");
+      const result = await addComment({
+        issueId,
+        actorId: parseId<UserId>(base62ToUuid(body.actorId)),
+        comment: {
+          commentId: parseId<CommentId>(base62ToUuid(body.comment.commentId)),
+          body: body.comment.body,
+          attachments: parseAttachments(body.comment.attachments),
+        },
+      });
+      if (!result.ok)
+        return c.json(
+          { error: result.error },
+          mapResultErrorToStatus(result.error.code),
+        );
+      return c.json({ ok: true }, 201);
+    },
+  )
   .delete("/:id", async (c) => {
     const issueId = parseId<IssueId>(base62ToUuid(c.req.param("id")));
     const result = await deleteIssue({ issueId });
@@ -198,25 +315,6 @@ export const issueRoutes = new Hono()
     return c.json({ ok: true });
   })
   .post(
-    "/:id/status",
-    zValidator("json", changeStatusBodySchema),
-    async (c) => {
-      const issueId = parseId<IssueId>(base62ToUuid(c.req.param("id")));
-      const body = c.req.valid("json");
-      const result = await changeStatus({
-        issueId,
-        newStatus: body.status,
-        actorId: parseId<UserId>(base62ToUuid(body.actorId)),
-      });
-      if (!result.ok)
-        return c.json(
-          { error: result.error },
-          mapResultErrorToStatus(result.error.code),
-        );
-      return c.json({ ok: true });
-    },
-  )
-  .post(
     "/:id/photos/upload-url",
     zValidator("json", generateUploadUrlBodySchema),
     async (c) => {
@@ -224,8 +322,8 @@ export const issueRoutes = new Hono()
       const body = c.req.valid("json");
       const result = await generateUploadUrl({
         issueId,
+        commentId: parseId<CommentId>(base62ToUuid(body.commentId)),
         fileName: body.fileName,
-        phase: body.phase,
       });
       if (!result.ok)
         return c.json(
@@ -236,47 +334,6 @@ export const issueRoutes = new Hono()
         photoId: uuidToBase62(result.value.photoId),
         uploadUrl: result.value.uploadUrl,
       });
-    },
-  )
-  .post(
-    "/:id/photos/confirm",
-    zValidator("json", confirmPhotoBodySchema),
-    async (c) => {
-      const issueId = parseId<IssueId>(base62ToUuid(c.req.param("id")));
-      const body = c.req.valid("json");
-      const result = await confirmPhoto({
-        issueId,
-        photoId: parseId<PhotoId>(base62ToUuid(body.photoId)),
-        fileName: body.fileName,
-        phase: body.phase,
-        actorId: parseId<UserId>(base62ToUuid(body.actorId)),
-      });
-      if (!result.ok)
-        return c.json(
-          { error: result.error },
-          mapResultErrorToStatus(result.error.code),
-        );
-      return c.json({ ok: true }, 201);
-    },
-  )
-  .delete(
-    "/:id/photos/:photoId",
-    zValidator("json", removePhotoBodySchema),
-    async (c) => {
-      const issueId = parseId<IssueId>(base62ToUuid(c.req.param("id")));
-      const photoId = parseId<PhotoId>(base62ToUuid(c.req.param("photoId")));
-      const body = c.req.valid("json");
-      const result = await removePhoto({
-        issueId,
-        photoId,
-        actorId: parseId<UserId>(base62ToUuid(body.actorId)),
-      });
-      if (!result.ok)
-        return c.json(
-          { error: result.error },
-          mapResultErrorToStatus(result.error.code),
-        );
-      return c.json({ ok: true });
     },
   )
   .get("/:id/history", async (c) => {

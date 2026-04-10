@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { COMMENT_MAX_LENGTH } from "../../domain/valueObjects/comment.js";
 import { ISSUE_CATEGORIES } from "../../domain/valueObjects/issueCategory.js";
 import { ISSUE_STATUSES } from "../../domain/valueObjects/issueStatus.js";
 import { base62IdSchema, positionSchema } from "./commonSchemas.js";
@@ -11,15 +12,35 @@ const safeFileNameSchema = z
     message: "File name must not contain path separators or '..'",
   });
 
+const attachmentSchema = z.object({
+  id: base62IdSchema,
+  fileName: safeFileNameSchema,
+  storagePath: z
+    .string()
+    .min(1)
+    .max(500)
+    .startsWith("pending/")
+    .refine((v) => !v.includes(".."), {
+      message: "storagePath must not contain '..'",
+    }),
+  uploadedAt: z.iso.datetime(),
+});
+
+const commentBodySchema = z.string().trim().min(1).max(COMMENT_MAX_LENGTH);
+
 export const createIssueBodySchema = z.object({
   issueId: base62IdSchema,
   projectId: base62IdSchema,
   title: z.string().trim().min(1).max(200),
-  description: z.string().max(10000),
   category: z.enum(ISSUE_CATEGORIES),
   position: positionSchema,
   reporterId: base62IdSchema,
   assigneeId: base62IdSchema.nullable().optional(),
+  comment: z.object({
+    commentId: base62IdSchema,
+    body: commentBodySchema,
+    attachments: z.array(attachmentSchema).max(10).optional(),
+  }),
 });
 
 export const issueFiltersQuerySchema = z.object({
@@ -37,11 +58,6 @@ export const updateTitleBodySchema = z.object({
   actorId: base62IdSchema,
 });
 
-export const updateDescriptionBodySchema = z.object({
-  description: z.string().max(10000),
-  actorId: base62IdSchema,
-});
-
 export const updateCategoryBodySchema = z.object({
   category: z.enum(ISSUE_CATEGORIES),
   actorId: base62IdSchema,
@@ -52,23 +68,47 @@ export const updateAssigneeBodySchema = z.object({
   actorId: base62IdSchema,
 });
 
-export const changeStatusBodySchema = z.object({
-  status: z.enum(ISSUE_STATUSES),
+export const updateIssueBodySchema = z.object({
+  title: z.string().trim().min(1).max(200).optional(),
+  category: z.enum(ISSUE_CATEGORIES).optional(),
+  assigneeId: base62IdSchema.nullable().optional(),
   actorId: base62IdSchema,
+});
+
+export const correctBodySchema = z.object({
+  status: z.enum(ISSUE_STATUSES).optional(),
+  actorId: base62IdSchema,
+  comment: z.object({
+    commentId: base62IdSchema,
+    body: commentBodySchema,
+    attachments: z.array(attachmentSchema).max(10).optional(),
+  }),
+});
+
+export const reviewBodySchema = z.object({
+  status: z.enum(ISSUE_STATUSES).optional(),
+  actorId: base62IdSchema,
+  comment: z.object({
+    commentId: base62IdSchema,
+    body: commentBodySchema,
+  }),
+});
+
+export const addCommentBodySchema = z.object({
+  actorId: base62IdSchema,
+  comment: z.object({
+    commentId: base62IdSchema,
+    body: commentBodySchema,
+    attachments: z.array(attachmentSchema).max(10).optional(),
+  }),
 });
 
 export const generateUploadUrlBodySchema = z.object({
+  commentId: base62IdSchema,
   fileName: safeFileNameSchema,
-  phase: z.enum(["before", "after"]),
 });
 
-export const confirmPhotoBodySchema = z.object({
-  photoId: base62IdSchema,
-  fileName: safeFileNameSchema,
-  phase: z.enum(["before", "after"]),
-  actorId: base62IdSchema,
-});
-
-export const removePhotoBodySchema = z.object({
+export const changeStatusBodySchema = z.object({
+  status: z.enum(ISSUE_STATUSES),
   actorId: base62IdSchema,
 });

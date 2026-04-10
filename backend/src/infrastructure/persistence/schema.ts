@@ -21,6 +21,7 @@ export const comments = pgTable(
     issueId: uuid("issue_id").notNull(),
     body: text("body").notNull(),
     actorId: uuid("actor_id").notNull(),
+    attachments: jsonb("attachments").notNull().default([]),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
   },
   (t) => [index("comments_issue_id_idx").on(t.issueId)],
@@ -82,15 +83,12 @@ export const issuesRead = pgTable(
     id: uuid("id").primaryKey(),
     projectId: uuid("project_id").notNull(),
     title: varchar("title", { length: 255 }).notNull(),
-    description: text("description").notNull(),
     status: varchar("status", { length: 20 }).notNull(),
     category: varchar("category", { length: 30 }).notNull(),
     positionType: varchar("position_type", { length: 20 }).notNull(),
     positionData: jsonb("position_data").notNull(),
     reporterId: uuid("reporter_id").notNull(),
     assigneeId: uuid("assignee_id"),
-    photoCount: integer("photo_count").notNull().default(0),
-    photos: jsonb("photos").notNull().default([]),
     /**
      * 最新5件のコメントキャッシュ（非正規化）。
      * ソースオブトゥルースは `comments` テーブル。

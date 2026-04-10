@@ -50,25 +50,36 @@ export const restorePayloadDates = (
   payload: Record<string, unknown>,
 ): Record<string, unknown> => {
   switch (type) {
-    case "IssueCreated": {
-      const photos = payload.photos as
-        | Array<Record<string, unknown>>
-        | undefined;
-      if (photos) {
-        return { ...payload, photos: photos.map(restorePhotoDate) };
-      }
-      return payload;
-    }
-    case "PhotoAdded": {
-      const photo = payload.photo as Record<string, unknown> | undefined;
-      if (photo) {
-        return { ...payload, photo: restorePhotoDate(photo) };
+    case "CommentAdded": {
+      const comment = payload.comment as Record<string, unknown> | undefined;
+      if (comment) {
+        return { ...payload, comment: restoreCommentDate(comment) };
       }
       return payload;
     }
     default:
       return payload;
   }
+};
+
+const restoreCommentDate = (
+  comment: Record<string, unknown>,
+): Record<string, unknown> => {
+  const restored: Record<string, unknown> = {
+    ...comment,
+    createdAt:
+      typeof comment.createdAt === "string"
+        ? new Date(comment.createdAt)
+        : comment.createdAt,
+  };
+
+  // attachments 内の Photo.uploadedAt を復元（undefined/null も空配列に正規化）
+  const attachments = (comment.attachments ?? []) as Array<
+    Record<string, unknown>
+  >;
+  restored.attachments = attachments.map(restorePhotoDate);
+
+  return restored;
 };
 
 const restorePhotoDate = (

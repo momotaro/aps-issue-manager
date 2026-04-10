@@ -117,7 +117,7 @@ backend/src/
 
 - アップロード時は `pending/` prefix → DB登録後に `confirmed/` へ移動
 - `pending/` の10分超過ファイルは minio-cleanup が自動削除
-- 写真パス: `confirmed/{issueId}/before/`, `confirmed/{issueId}/after/`
+- 写真パス: `confirmed/{issueId}/{commentId}/{photoId}.{ext}`
 
 ### クリーンアーキテクチャ
 

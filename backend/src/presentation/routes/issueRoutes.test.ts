@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
+  CommentId,
   IssueId,
   ProjectId,
   UserId,
@@ -11,10 +12,12 @@ import { uuidToBase62 } from "../serializers/externalId.js";
 const issueId = parseId<IssueId>("019654a1-b234-7000-8000-000000000010");
 const projectId = parseId<ProjectId>("019654a1-b234-7000-8000-000000000020");
 const userId = parseId<UserId>("019654a1-b234-7000-8000-000000000030");
+const commentId = parseId<CommentId>("019654a1-b234-7000-8000-000000000040");
 
 const issueBase62 = uuidToBase62(issueId);
 const projectBase62 = uuidToBase62(projectId);
 const userBase62 = uuidToBase62(userId);
+const commentBase62 = uuidToBase62(commentId);
 
 const mockIssueRepo = {
   load: vi.fn(),
@@ -56,15 +59,13 @@ const listItem = {
   reporterName: "テスト太郎",
   assigneeName: null,
   position: { type: "spatial" as const, worldPosition: { x: 1, y: 2, z: 3 } },
-  photoCount: 0,
   createdAt: new Date("2026-01-01T00:00:00Z"),
   updatedAt: new Date("2026-01-01T00:00:00Z"),
 };
 
 const detail = {
   ...listItem,
-  description: "詳細",
-  photos: [],
+  recentComments: [],
 };
 
 describe("issueRoutes", () => {
@@ -131,7 +132,7 @@ describe("issueRoutes", () => {
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.title).toBe("テスト指摘");
-      expect(body.description).toBe("詳細");
+      expect(body.recentComments).toEqual([]);
     });
 
     it("存在しない場合 404 を返す", async () => {
@@ -153,10 +154,13 @@ describe("issueRoutes", () => {
           issueId: issueBase62,
           projectId: projectBase62,
           title: "新規指摘",
-          description: "テスト",
           category: "quality_defect",
           position: { type: "spatial", worldPosition: { x: 0, y: 0, z: 0 } },
           reporterId: userBase62,
+          comment: {
+            commentId: commentBase62,
+            body: "初回コメント",
+          },
         }),
       });
       expect(res.status).toBe(201);
@@ -174,6 +178,113 @@ describe("issueRoutes", () => {
     });
   });
 
+  describe("PUT /api/issues/:id", () => {
+    it("一括更新で 200 を返す", async () => {
+      mockIssueRepo.load.mockResolvedValue({
+        id: issueId,
+        title: "旧タイトル",
+        status: "open",
+        category: "quality_defect",
+        assigneeId: null,
+        version: 1,
+        comments: [],
+      });
+      mockIssueRepo.save.mockResolvedValue(undefined);
+      const res = await app.request(`/api/issues/${issueBase62}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: "更新タイトル",
+          category: "safety_hazard",
+          actorId: userBase62,
+        }),
+      });
+      expect(res.status).toBe(200);
+    });
+  });
+
+  describe("POST /api/issues/:id/correct", () => {
+    it("是正報告で 200 を返す", async () => {
+      mockIssueRepo.load.mockResolvedValue({
+        id: issueId,
+        title: "指摘",
+        status: "in_progress",
+        category: "quality_defect",
+        assigneeId: null,
+        version: 1,
+        comments: [],
+      });
+      mockIssueRepo.save.mockResolvedValue(undefined);
+      const res = await app.request(`/api/issues/${issueBase62}/correct`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          actorId: userBase62,
+          comment: {
+            commentId: commentBase62,
+            body: "是正しました",
+          },
+        }),
+      });
+      expect(res.status).toBe(200);
+    });
+  });
+
+  describe("POST /api/issues/:id/review", () => {
+    it("レビューで 200 を返す", async () => {
+      mockIssueRepo.load.mockResolvedValue({
+        id: issueId,
+        title: "指摘",
+        status: "in_review",
+        category: "quality_defect",
+        assigneeId: null,
+        version: 1,
+        comments: [],
+      });
+      mockIssueRepo.save.mockResolvedValue(undefined);
+      const res = await app.request(`/api/issues/${issueBase62}/review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: "done",
+          actorId: userBase62,
+          comment: {
+            commentId: commentBase62,
+            body: "承認します",
+          },
+        }),
+      });
+      expect(res.status).toBe(200);
+    });
+  });
+
+  describe("POST /api/issues/:id/comments", () => {
+    it("コメント追加で 201 を返す", async () => {
+      mockIssueRepo.load.mockResolvedValue({
+        id: issueId,
+        title: "指摘",
+        status: "open",
+        category: "quality_defect",
+        assigneeId: null,
+        version: 1,
+        comments: [],
+      });
+      mockIssueRepo.save.mockResolvedValue(undefined);
+      const res = await app.request(`/api/issues/${issueBase62}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          actorId: userBase62,
+          comment: {
+            commentId: commentBase62,
+            body: "追加コメント",
+          },
+        }),
+      });
+      expect(res.status).toBe(201);
+    });
+  });
+
   describe("DELETE /api/issues/:id", () => {
     it("存在しない場合 404 を返す", async () => {
       mockIssueRepo.load.mockResolvedValue(null);
@@ -183,6 +294,28 @@ describe("issueRoutes", () => {
       expect(res.status).toBe(404);
       const body = await res.json();
       expect(body.error.code).toBe("ISSUE_NOT_FOUND");
+    });
+  });
+
+  describe("POST /api/issues/:id/photos/upload-url", () => {
+    it("presigned URL を返す", async () => {
+      mockBlobStorage.generateUploadUrl.mockResolvedValue({
+        uploadUrl: "https://minio:9000/presigned-url",
+      });
+      const res = await app.request(
+        `/api/issues/${issueBase62}/photos/upload-url`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            commentId: commentBase62,
+            fileName: "photo.jpg",
+          }),
+        },
+      );
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.uploadUrl).toBeDefined();
     });
   });
 
@@ -196,13 +329,11 @@ describe("issueRoutes", () => {
           payload: {
             projectId,
             title: "テスト",
-            description: "",
             status: "open",
             category: "quality_defect",
             position: { type: "spatial", worldPosition: { x: 0, y: 0, z: 0 } },
             reporterId: userId,
             assigneeId: null,
-            photos: [],
           },
           actorId: userId,
           version: 1,

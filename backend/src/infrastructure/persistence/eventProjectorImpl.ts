@@ -19,7 +19,6 @@ export const createEventProjector =
               id: event.issueId,
               projectId: payload.projectId,
               title: payload.title,
-              description: payload.description,
               status: payload.status,
               category: payload.category,
               positionType: payload.position.type,
@@ -29,8 +28,6 @@ export const createEventProjector =
               >,
               reporterId: payload.reporterId,
               assigneeId: payload.assigneeId,
-              photoCount: payload.photos.length,
-              photos: payload.photos as unknown as Record<string, unknown>[],
               version: event.version,
               createdAt: event.occurredAt,
               updatedAt: event.occurredAt,
@@ -40,12 +37,16 @@ export const createEventProjector =
 
           if (event.type === "CommentAdded") {
             const { comment } = event.payload;
-            // comments テーブルに追記
+            // comments テーブルに追記（attachments 含む）
             await executor.insert(comments).values({
               id: comment.commentId,
               issueId: event.issueId,
               body: comment.body,
               actorId: comment.actorId,
+              attachments: comment.attachments as unknown as Record<
+                string,
+                unknown
+              >[],
               createdAt: comment.createdAt,
             });
             // issues_read.recent_comments を最新5件に維持
@@ -92,31 +93,11 @@ const eventToUpdates = (
   switch (event.type) {
     case "IssueTitleUpdated":
       return { title: event.payload.title };
-    case "IssueDescriptionUpdated":
-      return { description: event.payload.description };
     case "IssueStatusChanged":
       return { status: event.payload.to };
     case "IssueCategoryChanged":
       return { category: event.payload.category };
     case "IssueAssigneeChanged":
       return { assigneeId: event.payload.assigneeId };
-    case "PhotoAdded": {
-      const appended = sql`${issuesRead.photos} || ${JSON.stringify([event.payload.photo])}::jsonb`;
-      return {
-        photos: appended,
-        photoCount: sql`jsonb_array_length(${appended})`,
-      };
-    }
-    case "PhotoRemoved": {
-      const filtered = sql`COALESCE((
-          SELECT jsonb_agg(elem)
-          FROM jsonb_array_elements(${issuesRead.photos}) AS elem
-          WHERE elem->>'id' != ${event.payload.photoId}
-        ), '[]'::jsonb)`;
-      return {
-        photos: filtered,
-        photoCount: sql`jsonb_array_length(${filtered})`,
-      };
-    }
   }
 };

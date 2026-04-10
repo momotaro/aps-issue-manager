@@ -48,13 +48,11 @@ export const makeIssueCreatedEvent = (
     payload: Object.freeze({
       projectId: overrides?.projectId ?? testProjectId,
       title: overrides?.title ?? "テスト指摘",
-      description: "テスト用の指摘です",
       status: "open" as const,
       category: overrides?.category ?? ("quality_defect" as const),
       position: createSpatialPosition(1, 2, 3),
       reporterId: overrides?.reporterId ?? testReporterId,
       assigneeId: null,
-      photos: Object.freeze([]),
     }),
   });
 };

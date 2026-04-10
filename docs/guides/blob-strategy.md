@@ -12,12 +12,12 @@ DBにはメタデータ（ファイル名、パス、サイズ等）のみ保持
 ## 2. アップロードフロー（Presigned URL 方式）
 
 ```
-1. Frontend → Backend: POST /api/issues/:id/photos/upload-url（fileName, phase を送信）
-2. Backend: photoId 生成 → pending/{issueId}/{photoId}.{ext} への Presigned PUT URL を発行 → 返却
+1. Frontend → Backend: POST /api/issues/:id/photos/upload-url（commentId, fileName を送信）
+2. Backend: photoId 生成 → pending/{issueId}/{commentId}/{photoId}.{ext} への Presigned PUT URL を発行 → 返却
 3. Frontend → MinIO: Presigned PUT URL でファイルを直接アップロード
-4. Frontend → Backend: POST /api/issues/:id/photos/confirm（photoId, fileName, phase を送信）
-5. Backend: DB にイベント（PhotoAdded）を永続化
-6. Backend: MinIO のファイルを confirmed/{issueId}/{phase}/{photoId}.{ext} に移動（CopyObject + Delete）
+4. Frontend → Backend: POST /api/issues/:id/correct（または /comments）で attachments を含むコメントを送信
+5. Backend: DB にイベント（CommentAdded）を永続化
+6. Backend: MinIO のファイルを confirmed/{issueId}/{commentId}/{photoId}.{ext} に移動（CopyObject + Delete）
 7. Backend → Frontend: 完了レスポンス
 ```
 

@@ -91,15 +91,12 @@ API レスポンス（DTO）
 
 | イベント | 発生タイミング | ペイロード |
 |---------|--------------|-----------|
-| `IssueCreated` | 指摘の新規登録 | 全初期フィールド（title, description, status, category, position, photos 等） |
+| `IssueCreated` | 指摘の新規登録 | 初期フィールド（title, status, category, position 等） |
 | `IssueTitleUpdated` | タイトル変更 | `title` |
-| `IssueDescriptionUpdated` | 説明変更 | `description` |
 | `IssueStatusChanged` | ステータス遷移 | `from`, `to` |
 | `IssueCategoryChanged` | 種別変更 | `category` |
 | `IssueAssigneeChanged` | 担当者変更 | `assigneeId` |
-| `PhotoAdded` | 写真追加 | `photo`（`storagePath` は確定的に計算した `confirmed/` パスを記録） |
-| `PhotoRemoved` | 写真削除 | `photoId` |
-| `CommentAdded` | コメント追加（immutable）| `comment`（`commentId`, `body`, `actorId`, `createdAt`） |
+| `CommentAdded` | コメント追加（immutable）| `comment`（`commentId`, `body`, `actorId`, `attachments`, `createdAt`） |
 
 ### イベントの構造
 
