@@ -1,11 +1,14 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createEventMeta } from "../../domain/events/eventMeta.js";
+import type { IssueDomainEvent } from "../../domain/events/issueEvents.js";
 import {
+  type CommentId,
   generateId,
   type IssueId,
   type ProjectId,
   type UserId,
 } from "../../domain/valueObjects/brandedId.js";
+import { createComment } from "../../domain/valueObjects/comment.js";
 import { createEventProjector } from "./eventProjectorImpl.js";
 import { createEventStore } from "./eventStoreImpl.js";
 import { createIssueQueryService } from "./issueQueryServiceImpl.js";
@@ -178,5 +181,54 @@ describe("issueQueryServiceImpl（結合テスト）", () => {
     await createIssue();
     const items = await queryService.findAll({ status: "done" });
     expect(items).toHaveLength(0);
+  });
+
+  // --- recentComments ---
+
+  it("findById でコメントが0件のとき recentComments は空配列を返す", async () => {
+    const event = await createIssue();
+    const detail = await queryService.findById(event.issueId);
+    expect(detail?.recentComments).toEqual([]);
+  });
+
+  it("findById で recentComments が返される", async () => {
+    const event = await createIssue();
+    const meta = createEventMeta(event.issueId, testActorId, 2);
+    const comment = createComment({
+      commentId: generateId<CommentId>(),
+      body: "テストコメント",
+      actorId: testActorId,
+      createdAt: meta.occurredAt,
+    });
+    const commentEvent: IssueDomainEvent = {
+      ...meta,
+      type: "CommentAdded",
+      payload: { comment },
+    };
+    await issueRepo.save(event.issueId, [commentEvent], 1);
+
+    const detail = await queryService.findById(event.issueId);
+    expect(detail?.recentComments).toHaveLength(1);
+    expect(detail?.recentComments[0].body).toBe("テストコメント");
+  });
+
+  it("findById で recentComments[*].createdAt が Date 型である", async () => {
+    const event = await createIssue();
+    const meta = createEventMeta(event.issueId, testActorId, 2);
+    const comment = createComment({
+      commentId: generateId<CommentId>(),
+      body: "日付テスト",
+      actorId: testActorId,
+      createdAt: meta.occurredAt,
+    });
+    const commentEvent: IssueDomainEvent = {
+      ...meta,
+      type: "CommentAdded",
+      payload: { comment },
+    };
+    await issueRepo.save(event.issueId, [commentEvent], 1);
+
+    const detail = await queryService.findById(event.issueId);
+    expect(detail?.recentComments[0].createdAt).toBeInstanceOf(Date);
   });
 });

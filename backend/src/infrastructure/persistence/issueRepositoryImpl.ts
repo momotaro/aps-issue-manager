@@ -13,6 +13,7 @@ import type { IssueId, UserId } from "../../domain/valueObjects/brandedId.js";
 import { parseId } from "../../domain/valueObjects/brandedId.js";
 import type { createEventProjector } from "./eventProjectorImpl.js";
 import type { createEventStore } from "./eventStoreImpl.js";
+import { restoreCommentDates } from "./issueQueryServiceImpl.js";
 import { issueEvents, issueSnapshots, issuesRead } from "./schema.js";
 import type { Db } from "./types.js";
 
@@ -115,6 +116,9 @@ const loadSnapshot = async (
       ? parseId<UserId>(state.assigneeId as string)
       : null,
     photos: restorePhotoDates(state.photos as Array<Record<string, unknown>>),
+    comments: restoreCommentDates(
+      state.comments as Array<Record<string, unknown>>,
+    ),
     version: row.version,
     createdAt: new Date(state.createdAt as string),
     updatedAt: new Date(state.updatedAt as string),
@@ -136,6 +140,10 @@ const snapshotToJson = (issue: Issue): Record<string, unknown> => ({
   photos: issue.photos.map((p) => ({
     ...p,
     uploadedAt: p.uploadedAt.toISOString(),
+  })),
+  comments: issue.comments.map((c) => ({
+    ...c,
+    createdAt: c.createdAt.toISOString(),
   })),
   version: issue.version,
   createdAt: issue.createdAt.toISOString(),

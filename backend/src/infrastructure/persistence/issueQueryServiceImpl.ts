@@ -9,6 +9,7 @@ import type {
 } from "../../domain/repositories/issueQueryService.js";
 import type { IssueId } from "../../domain/valueObjects/brandedId.js";
 import { parseId } from "../../domain/valueObjects/brandedId.js";
+import type { Comment } from "../../domain/valueObjects/comment.js";
 import type { IssueCategory } from "../../domain/valueObjects/issueCategory.js";
 import type { IssueStatus } from "../../domain/valueObjects/issueStatus.js";
 import {
@@ -42,6 +43,9 @@ export const createIssueQueryService = (db: Db): IssueQueryService => ({
       ...toListItem(row, nameMap),
       description: row.description,
       photos: restorePhotoDates(row.photos as Array<Record<string, unknown>>),
+      recentComments: restoreCommentDates(
+        row.recentComments as Array<Record<string, unknown>>,
+      ),
     };
   },
 
@@ -167,6 +171,18 @@ const normalizeStoragePath = (photo: Record<string, unknown>): string => {
   const ext = fileName.split(".").pop() ?? "";
   return confirmedBlobPath(issueId, phase, photoId, ext);
 };
+
+export const restoreCommentDates = (
+  comments: Array<Record<string, unknown>>,
+): readonly Comment[] =>
+  (comments ?? []).map(
+    (c) =>
+      ({
+        ...c,
+        createdAt:
+          typeof c.createdAt === "string" ? new Date(c.createdAt) : c.createdAt,
+      }) as Comment,
+  );
 
 const restorePhotoDates = (
   photos: Array<Record<string, unknown>>,

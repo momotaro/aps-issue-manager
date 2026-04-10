@@ -15,6 +15,13 @@
       "when": 1775249991733,
       "tag": "0001_many_the_initiative",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1775828044773,
+      "tag": "0002_add_comments_table_and_recent_comments",
+      "breakpoints": true
     }
   ]
 }

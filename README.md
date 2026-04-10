@@ -8,8 +8,6 @@
 - ステータス（Open / In Progress / In Review / Done）を遷移管理する
 - 一覧から 3D 上の該当箇所へ即座に移動できる
 
-課題原典: [`issue_overview.md`](./issue_overview.md)
-
 ---
 
 ## クイックスタート
@@ -235,7 +233,10 @@ stateDiagram-v2
 ```
 
 遷移ルールは `domain/valueObjects/` に定義し、不正な遷移をドメイン層で防止する。
-差し戻し（In Review → In Progress）により、是正のやり直しフローに対応する。
+
+`in_review` ステータスを設けることで、是正作業の完了と管理者による承認を明確に分離した。
+是正担当者が「完了した」と思っても管理者が「不十分」と判断した場合に差し戻し（In Review → In Progress）でき、
+承認・差し戻しのやり取りを状態として記録できる。
 
 **ビジネスルールの所在**
 

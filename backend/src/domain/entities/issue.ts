@@ -13,6 +13,7 @@
 
 import { createEventMeta } from "../events/eventMeta.js";
 import type {
+  CommentAddedEvent,
   IssueAssigneeChangedEvent,
   IssueCategoryChangedEvent,
   IssueCreatedEvent,
@@ -24,11 +25,14 @@ import type {
   PhotoRemovedEvent,
 } from "../events/issueEvents.js";
 import type {
+  CommentId,
   IssueId,
   PhotoId,
   ProjectId,
   UserId,
 } from "../valueObjects/brandedId.js";
+import type { Comment } from "../valueObjects/comment.js";
+import { COMMENT_MAX_LENGTH, createComment } from "../valueObjects/comment.js";
 import type { IssueCategory } from "../valueObjects/issueCategory.js";
 import type { IssueStatus } from "../valueObjects/issueStatus.js";
 import { validateTransition } from "../valueObjects/issueStatus.js";
@@ -69,6 +73,14 @@ export type Issue = {
   readonly assigneeId: UserId | null;
   /** 添付写真の一覧。 */
   readonly photos: readonly Photo[];
+  /**
+   * コメントの一覧（全件）。
+   *
+   * @remarks
+   * イベントソーシングによりすべてのコメントを保持する。
+   * コメント件数が大幅に増加した場合はスナップショット戦略の導入を検討すること。
+   */
+  readonly comments: readonly Comment[];
   /** 適用済みイベントの最新バージョン番号。 */
   readonly version: number;
   /** 集約の作成日時（`IssueCreated` イベントの `occurredAt`）。 */
@@ -108,6 +120,7 @@ export const applyEvent = (
       reporterId: event.payload.reporterId,
       assigneeId: event.payload.assigneeId,
       photos: Object.freeze([...event.payload.photos]),
+      comments: Object.freeze([]),
       version: event.version,
       createdAt: event.occurredAt,
       updatedAt: event.occurredAt,
@@ -172,6 +185,14 @@ export const applyEvent = (
         photos: Object.freeze(
           current.photos.filter((p) => p.id !== event.payload.photoId),
         ),
+        version: event.version,
+        updatedAt: event.occurredAt,
+      });
+
+    case "CommentAdded":
+      return Object.freeze({
+        ...current,
+        comments: Object.freeze([...current.comments, event.payload.comment]),
         version: event.version,
         updatedAt: event.occurredAt,
       });
@@ -426,6 +447,56 @@ export const addPhoto = (
       ...createEventMeta(issue.id, actorId, issue.version + 1),
       type: "PhotoAdded" as const,
       payload: Object.freeze({ photo }),
+    }),
+  );
+};
+
+/**
+ * 指摘にコメントを追加するコマンド。
+ *
+ * @remarks
+ * コメントは immutable（追加のみ）。
+ * `comment.createdAt` は `event.occurredAt` と同値で設定される。
+ *
+ * @param issue - 現在の Issue 状態
+ * @param commentId - 新しいコメントの ID
+ * @param body - コメント本文
+ * @param actorId - 操作者の User ID
+ * @returns 成功時は `CommentAddedEvent`、失敗時はエラー詳細
+ */
+export const addComment = (
+  issue: Issue,
+  commentId: CommentId,
+  body: string,
+  actorId: UserId,
+): Result<CommentAddedEvent, DomainErrorDetail> => {
+  if (body.trim().length === 0) {
+    return err({
+      code: "EMPTY_COMMENT",
+      message: "Comment body must not be empty",
+    });
+  }
+
+  if (body.trim().length > COMMENT_MAX_LENGTH) {
+    return err({
+      code: "BODY_TOO_LONG",
+      message: `Comment body must not exceed ${COMMENT_MAX_LENGTH} characters`,
+    });
+  }
+
+  const meta = createEventMeta(issue.id, actorId, issue.version + 1);
+  const comment = createComment({
+    commentId,
+    body: body.trim(),
+    actorId,
+    createdAt: meta.occurredAt,
+  });
+
+  return ok(
+    Object.freeze({
+      ...meta,
+      type: "CommentAdded" as const,
+      payload: Object.freeze({ comment }),
     }),
   );
 };

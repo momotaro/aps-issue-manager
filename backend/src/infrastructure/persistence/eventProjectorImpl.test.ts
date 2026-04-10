@@ -3,13 +3,15 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createEventMeta } from "../../domain/events/eventMeta.js";
 import type { IssueDomainEvent } from "../../domain/events/issueEvents.js";
 import {
+  type CommentId,
   generateId,
   type PhotoId,
   type UserId,
 } from "../../domain/valueObjects/brandedId.js";
+import { createComment } from "../../domain/valueObjects/comment.js";
 import { createPhoto } from "../../domain/valueObjects/photo.js";
 import { createEventProjector } from "./eventProjectorImpl.js";
-import { issuesRead } from "./schema.js";
+import { comments, issuesRead } from "./schema.js";
 import { makeIssueCreatedEvent, testActorId } from "./testFixtures.js";
 import { cleanTables, closeTestDb, getTestDb } from "./testHelper.js";
 
@@ -207,5 +209,84 @@ describe("eventProjectorImpl（結合テスト）", () => {
     expect(rows[0].photoCount).toBe(0);
     const photos = rows[0].photos as Array<unknown>;
     expect(photos).toHaveLength(0);
+  });
+
+  // ---------------------------------------------------------------------------
+  // CommentAdded
+  // ---------------------------------------------------------------------------
+
+  describe("CommentAdded", () => {
+    const makeCommentAddedEvent = (
+      issueId: ReturnType<typeof makeIssueCreatedEvent>["issueId"],
+      version: number,
+    ): IssueDomainEvent => {
+      const meta = createEventMeta(issueId, testActorId, version);
+      const comment = createComment({
+        commentId: generateId<CommentId>(),
+        body: `コメント${version}`,
+        actorId: testActorId,
+        createdAt: meta.occurredAt,
+      });
+      return {
+        ...meta,
+        type: "CommentAdded",
+        payload: { comment },
+      };
+    };
+
+    it("CommentAdded で comments テーブルに INSERT される", async () => {
+      const created = await projectCreated();
+      const event = makeCommentAddedEvent(created.issueId, 2);
+      await projector.project([event]);
+
+      const rows = await db
+        .select()
+        .from(comments)
+        .where(eq(comments.issueId, created.issueId));
+      expect(rows).toHaveLength(1);
+      expect(rows[0].body).toBe("コメント2");
+      expect(rows[0].actorId).toBe(testActorId);
+      expect(rows[0].issueId).toBe(created.issueId);
+    });
+
+    it("CommentAdded で issues_read.recent_comments が更新される", async () => {
+      const created = await projectCreated();
+      const event = makeCommentAddedEvent(created.issueId, 2);
+      await projector.project([event]);
+
+      const rows = await db
+        .select()
+        .from(issuesRead)
+        .where(eq(issuesRead.id, created.issueId));
+      const recentComments = rows[0].recentComments as Array<{
+        body: string;
+      }>;
+      expect(recentComments).toHaveLength(1);
+      expect(recentComments[0].body).toBe("コメント2");
+    });
+
+    it("CommentAdded × 6回で recent_comments は最新5件のみ保持される", async () => {
+      const created = await projectCreated();
+      const events: IssueDomainEvent[] = Array.from({ length: 6 }, (_, i) =>
+        makeCommentAddedEvent(created.issueId, i + 2),
+      );
+      await projector.project(events);
+
+      const rows = await db
+        .select()
+        .from(issuesRead)
+        .where(eq(issuesRead.id, created.issueId));
+      const recentComments = rows[0].recentComments as Array<{
+        body: string;
+      }>;
+      expect(recentComments).toHaveLength(5);
+
+      // comments テーブルには全6件が INSERT されている
+      const commentRows = await db
+        .select()
+        .from(comments)
+        .where(eq(comments.issueId, created.issueId));
+      expect(commentRows).toHaveLength(6);
+    });
   });
 });

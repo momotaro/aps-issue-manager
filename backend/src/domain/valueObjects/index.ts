@@ -6,6 +6,7 @@
  */
 
 export * from "./brandedId.js";
+export * from "./comment.js";
 export * from "./issueCategory.js";
 export * from "./issueStatus.js";
 export * from "./photo.js";

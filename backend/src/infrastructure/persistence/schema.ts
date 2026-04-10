@@ -11,6 +11,22 @@ import {
 } from "drizzle-orm/pg-core";
 
 // ---------------------------------------------------------------------------
+// comments
+// ---------------------------------------------------------------------------
+
+export const comments = pgTable(
+  "comments",
+  {
+    id: uuid("id").primaryKey(),
+    issueId: uuid("issue_id").notNull(),
+    body: text("body").notNull(),
+    actorId: uuid("actor_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [index("comments_issue_id_idx").on(t.issueId)],
+);
+
+// ---------------------------------------------------------------------------
 // users
 // ---------------------------------------------------------------------------
 
@@ -75,6 +91,12 @@ export const issuesRead = pgTable(
     assigneeId: uuid("assignee_id"),
     photoCount: integer("photo_count").notNull().default(0),
     photos: jsonb("photos").notNull().default([]),
+    /**
+     * 最新5件のコメントキャッシュ（非正規化）。
+     * ソースオブトゥルースは `comments` テーブル。
+     * 不整合発生時は `comments` テーブルから再投影して復元すること。
+     */
+    recentComments: jsonb("recent_comments").notNull().default([]),
     version: integer("version").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
