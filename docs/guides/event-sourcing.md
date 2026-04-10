@@ -99,6 +99,7 @@ API レスポンス（DTO）
 | `IssueAssigneeChanged` | 担当者変更 | `assigneeId` |
 | `PhotoAdded` | 写真追加 | `photo`（`storagePath` は確定的に計算した `confirmed/` パスを記録） |
 | `PhotoRemoved` | 写真削除 | `photoId` |
+| `CommentAdded` | コメント追加（immutable）| `comment`（`commentId`, `body`, `actorId`, `createdAt`） |
 
 ### イベントの構造
 

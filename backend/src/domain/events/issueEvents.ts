@@ -10,6 +10,7 @@
  */
 
 import type { PhotoId, ProjectId, UserId } from "../valueObjects/brandedId.js";
+import type { Comment } from "../valueObjects/comment.js";
 import type { IssueCategory } from "../valueObjects/issueCategory.js";
 import type { IssueStatus } from "../valueObjects/issueStatus.js";
 import type { Photo } from "../valueObjects/photo.js";
@@ -88,6 +89,18 @@ export type PhotoRemovedEvent = DomainEvent<
   { readonly photoId: PhotoId }
 >;
 
+/**
+ * 指摘にコメントが追加された。
+ *
+ * @remarks
+ * コメントは immutable（追加のみ）。
+ * `comment.createdAt` は `event.occurredAt` と同値で生成すること。
+ */
+export type CommentAddedEvent = DomainEvent<
+  "CommentAdded",
+  { readonly comment: Comment }
+>;
+
 // ---------------------------------------------------------------------------
 // 判別共用体
 // ---------------------------------------------------------------------------
@@ -112,7 +125,8 @@ export type IssueDomainEvent =
   | IssueCategoryChangedEvent
   | IssueAssigneeChangedEvent
   | PhotoAddedEvent
-  | PhotoRemovedEvent;
+  | PhotoRemovedEvent
+  | CommentAddedEvent;
 
 /** すべてのドメインイベントの `type` フィールドの値。 */
 export type IssueDomainEventType = IssueDomainEvent["type"];

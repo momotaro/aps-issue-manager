@@ -11,6 +11,7 @@
 
 import type { IssueDomainEvent } from "../events/issueEvents.js";
 import type { IssueId, ProjectId, UserId } from "../valueObjects/brandedId.js";
+import type { Comment } from "../valueObjects/comment.js";
 import type { IssueCategory } from "../valueObjects/issueCategory.js";
 import type { IssueStatus } from "../valueObjects/issueStatus.js";
 import type { Photo } from "../valueObjects/photo.js";
@@ -50,6 +51,11 @@ export type IssueListItem = {
 export type IssueDetail = IssueListItem & {
   readonly description: string;
   readonly photos: readonly Photo[];
+  /**
+   * 最新5件のコメントキャッシュ。
+   * 全コメントを取得する場合はイベント履歴（`getEventHistory`）を参照すること。
+   */
+  readonly recentComments: readonly Comment[];
 };
 
 // ---------------------------------------------------------------------------

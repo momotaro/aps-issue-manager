@@ -40,6 +40,7 @@ const baseIssue: Issue = Object.freeze({
   reporterId: actorId,
   assigneeId: null,
   photos: [photo],
+  comments: [],
   version: 2,
   createdAt: new Date("2026-01-01"),
   updatedAt: new Date("2026-01-01"),

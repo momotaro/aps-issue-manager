@@ -32,6 +32,7 @@ const createMockDetail = (overrides?: Partial<IssueDetail>): IssueDetail => ({
   updatedAt: new Date("2026-01-01"),
   description: "3階東側の壁にひび割れを確認",
   photos: [],
+  recentComments: [],
   ...overrides,
 });
 

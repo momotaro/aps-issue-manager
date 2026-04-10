@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { IssueDomainEvent } from "../events/issueEvents.js";
 import {
+  type CommentId,
   generateId,
   type IssueId,
   type PhotoId,
@@ -8,9 +9,11 @@ import {
   parseId,
   type UserId,
 } from "../valueObjects/brandedId.js";
+import { COMMENT_MAX_LENGTH } from "../valueObjects/comment.js";
 import { createPhoto } from "../valueObjects/photo.js";
 import { createSpatialPosition } from "../valueObjects/position.js";
 import {
+  addComment,
   addPhoto,
   applyEvent,
   changeAssignee,
@@ -349,6 +352,140 @@ describe("applyEvent（全イベント型の状態適用）", () => {
 
     const updated = applyEvent(issue, result.value);
     expect(updated.assigneeId).toBe(assigneeId);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// addComment
+// ---------------------------------------------------------------------------
+
+describe("addComment", () => {
+  it("有効なコメントで CommentAddedEvent を生成する", () => {
+    const issue = makeIssue();
+    const commentId = generateId<CommentId>();
+    const result = addComment(issue, commentId, "コメント本文", actorId);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.value.type).toBe("CommentAdded");
+    expect(result.value.version).toBe(issue.version + 1);
+    expect(result.value.payload.comment.body).toBe("コメント本文");
+    expect(result.value.payload.comment.commentId).toBe(commentId);
+    expect(result.value.payload.comment.actorId).toBe(actorId);
+  });
+
+  it("空文字のコメントで EMPTY_COMMENT エラーを返す", () => {
+    const issue = makeIssue();
+    const result = addComment(issue, generateId<CommentId>(), "", actorId);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("EMPTY_COMMENT");
+    }
+  });
+
+  it("空白のみのコメントで EMPTY_COMMENT エラーを返す", () => {
+    const issue = makeIssue();
+    const result = addComment(issue, generateId<CommentId>(), "   ", actorId);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("EMPTY_COMMENT");
+    }
+  });
+
+  it("コメント本文の前後空白をトリムする", () => {
+    const issue = makeIssue();
+    const result = addComment(
+      issue,
+      generateId<CommentId>(),
+      "  本文  ",
+      actorId,
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.payload.comment.body).toBe("本文");
+    const updated = applyEvent(issue, result.value);
+    expect(updated.comments[0].body).toBe("本文");
+  });
+
+  it(`本文が ${COMMENT_MAX_LENGTH} 文字を超える場合 BODY_TOO_LONG エラーを返す`, () => {
+    const issue = makeIssue();
+    const longBody = "あ".repeat(COMMENT_MAX_LENGTH + 1);
+    const result = addComment(
+      issue,
+      generateId<CommentId>(),
+      longBody,
+      actorId,
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("BODY_TOO_LONG");
+    }
+  });
+
+  it(`本文がちょうど ${COMMENT_MAX_LENGTH} 文字の場合は成功する`, () => {
+    const issue = makeIssue();
+    const maxBody = "あ".repeat(COMMENT_MAX_LENGTH);
+    const result = addComment(issue, generateId<CommentId>(), maxBody, actorId);
+    expect(result.ok).toBe(true);
+  });
+});
+
+describe("applyEvent（CommentAdded）", () => {
+  it("CommentAdded で comments 配列にコメントが追加される", () => {
+    const issue = makeIssue();
+    expect(issue.comments).toHaveLength(0);
+
+    const result = addComment(issue, generateId<CommentId>(), "本文", actorId);
+    if (!result.ok) throw new Error();
+
+    const updated = applyEvent(issue, result.value);
+    expect(updated.comments).toHaveLength(1);
+    expect(updated.comments[0].body).toBe("本文");
+    expect(updated.version).toBe(issue.version + 1);
+  });
+
+  it("複数のコメントを追加できる", () => {
+    const issue = makeIssue();
+    const r1 = addComment(issue, generateId<CommentId>(), "1件目", actorId);
+    if (!r1.ok) throw new Error();
+    const issue2 = applyEvent(issue, r1.value);
+
+    const r2 = addComment(issue2, generateId<CommentId>(), "2件目", actorId);
+    if (!r2.ok) throw new Error();
+    const issue3 = applyEvent(issue2, r2.value);
+
+    expect(issue3.comments).toHaveLength(2);
+    expect(issue3.comments[1].body).toBe("2件目");
+  });
+
+  it("applyEvent は元の issue を変更しない（イミュータビリティ）", () => {
+    const issue = makeIssue();
+    const result = addComment(issue, generateId<CommentId>(), "本文", actorId);
+    if (!result.ok) throw new Error();
+    applyEvent(issue, result.value);
+    expect(issue.comments).toHaveLength(0);
+  });
+
+  it("rehydrate で CommentAdded を含むイベント列から正しく復元できる", () => {
+    const createdEvent = makeCreatedEvent();
+    const issue = applyEvent(null, createdEvent);
+
+    const r1 = addComment(issue, generateId<CommentId>(), "コメント1", actorId);
+    if (!r1.ok) throw new Error();
+    const issue2 = applyEvent(issue, r1.value);
+    const r2 = addComment(
+      issue2,
+      generateId<CommentId>(),
+      "コメント2",
+      actorId,
+    );
+    if (!r2.ok) throw new Error();
+
+    const final = rehydrate([createdEvent, r1.value, r2.value]);
+    expect(final).not.toBeNull();
+    expect(final?.comments).toHaveLength(2);
+    expect(final?.comments[0].body).toBe("コメント1");
+    expect(final?.comments[1].body).toBe("コメント2");
   });
 });
 

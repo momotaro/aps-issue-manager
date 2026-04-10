@@ -43,7 +43,7 @@ export const getTestDb = (): Db => {
 /** テスト用テーブルを全クリアする。 */
 export const cleanTables = async (db: Db): Promise<void> => {
   await db.execute(
-    sql`TRUNCATE issue_events, issues_read, issue_snapshots, users, projects CASCADE`,
+    sql`TRUNCATE issue_events, issues_read, issue_snapshots, comments, users, projects CASCADE`,
   );
 };
 

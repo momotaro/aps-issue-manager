@@ -35,6 +35,9 @@ export type EventId = Brand<string, "EventId">;
 /** 写真の一意識別子。 */
 export type PhotoId = Brand<string, "PhotoId">;
 
+/** コメントの一意識別子。 */
+export type CommentId = Brand<string, "CommentId">;
+
 // ---------------------------------------------------------------------------
 // ジェネリック ID 生成 / パース
 // ---------------------------------------------------------------------------
