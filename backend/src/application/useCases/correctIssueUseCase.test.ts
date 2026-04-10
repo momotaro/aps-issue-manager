@@ -115,6 +115,7 @@ describe("correctIssueUseCase", () => {
     };
     const useCase = correctIssueUseCase(repo, blob);
     const commentId = generateId<CommentId>();
+    const photoId = generateId<PhotoId>();
 
     const result = await useCase({
       issueId: issue.id,
@@ -124,9 +125,9 @@ describe("correctIssueUseCase", () => {
         body: "是正後の写真",
         attachments: [
           {
-            id: generateId<PhotoId>(),
+            id: photoId,
             fileName: "photo.jpg",
-            storagePath: `pending/${issue.id}/${commentId}/photo1.jpg`,
+            storagePath: `pending/${issue.id}/${commentId}/${photoId}.jpg`,
             uploadedAt: new Date(),
           },
         ],

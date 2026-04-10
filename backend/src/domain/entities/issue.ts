@@ -164,6 +164,13 @@ export const applyEvent = (
         version: event.version,
         updatedAt: event.occurredAt,
       });
+
+    default: {
+      const _exhaustive: never = event;
+      throw new Error(
+        `Unknown issue event type: ${(_exhaustive as IssueDomainEvent).type}`,
+      );
+    }
   }
 };
 
@@ -456,6 +463,12 @@ export const addComment = (
     return err({
       code: "TOO_MANY_ATTACHMENTS",
       message: `Attachments must not exceed ${COMMENT_MAX_ATTACHMENTS}`,
+    });
+  }
+  if (issue.comments.some((existing) => existing.commentId === commentId)) {
+    return err({
+      code: "DUPLICATE_COMMENT",
+      message: `Comment with the same id already exists: ${commentId}`,
     });
   }
 

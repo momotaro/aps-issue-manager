@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { BlobStorage } from "../../domain/services/blobStorage.js";
 import {
+  type CommentId,
   type IssueId,
   type PhotoId,
   parseId,
@@ -13,6 +14,7 @@ import { confirmPhotoUploadUseCase } from "./confirmPhotoUploadUseCase.js";
 // ---------------------------------------------------------------------------
 
 const issueId = parseId<IssueId>("019560a0-0000-7000-8000-000000000001");
+const commentId = parseId<CommentId>("019560a0-0000-7000-8000-000000000020");
 const photoId = parseId<PhotoId>("019560a0-0000-7000-8000-000000000010");
 
 // ---------------------------------------------------------------------------
@@ -31,7 +33,7 @@ const createMockBlobStorage = (
           createPhoto({
             id: p.id,
             fileName: p.fileName,
-            storagePath: `confirmed/${_issueId}/${p.id}.jpg`,
+            storagePath: `confirmed/${_issueId}/${commentId}/${p.id}.jpg`,
             uploadedAt: new Date(),
           }),
         ),
@@ -55,7 +57,7 @@ describe("confirmPhotoUploadUseCase", () => {
       createPhoto({
         id: photoId,
         fileName: "crack.jpg",
-        storagePath: `pending/${issueId}/${photoId}.jpg`,
+        storagePath: `pending/${issueId}/${commentId}/${photoId}.jpg`,
         uploadedAt: new Date(),
       }),
     ];
@@ -86,7 +88,7 @@ describe("confirmPhotoUploadUseCase", () => {
       createPhoto({
         id: photoId,
         fileName: "crack.jpg",
-        storagePath: `pending/${issueId}/${photoId}.jpg`,
+        storagePath: `pending/${issueId}/${commentId}/${photoId}.jpg`,
         uploadedAt: new Date(),
       }),
     ];

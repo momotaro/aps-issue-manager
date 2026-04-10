@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { COMMENT_MAX_LENGTH } from "../../domain/valueObjects/comment.js";
+import {
+  COMMENT_MAX_ATTACHMENTS,
+  COMMENT_MAX_LENGTH,
+} from "../../domain/valueObjects/comment.js";
 import { ISSUE_CATEGORIES } from "../../domain/valueObjects/issueCategory.js";
 import { ISSUE_STATUSES } from "../../domain/valueObjects/issueStatus.js";
 import { base62IdSchema, positionSchema } from "./commonSchemas.js";
@@ -39,7 +42,10 @@ export const createIssueBodySchema = z.object({
   comment: z.object({
     commentId: base62IdSchema,
     body: commentBodySchema,
-    attachments: z.array(attachmentSchema).max(10).optional(),
+    attachments: z
+      .array(attachmentSchema)
+      .max(COMMENT_MAX_ATTACHMENTS)
+      .optional(),
   }),
 });
 
@@ -81,7 +87,10 @@ export const correctBodySchema = z.object({
   comment: z.object({
     commentId: base62IdSchema,
     body: commentBodySchema,
-    attachments: z.array(attachmentSchema).max(10).optional(),
+    attachments: z
+      .array(attachmentSchema)
+      .max(COMMENT_MAX_ATTACHMENTS)
+      .optional(),
   }),
 });
 
@@ -99,7 +108,10 @@ export const addCommentBodySchema = z.object({
   comment: z.object({
     commentId: base62IdSchema,
     body: commentBodySchema,
-    attachments: z.array(attachmentSchema).max(10).optional(),
+    attachments: z
+      .array(attachmentSchema)
+      .max(COMMENT_MAX_ATTACHMENTS)
+      .optional(),
   }),
 });
 

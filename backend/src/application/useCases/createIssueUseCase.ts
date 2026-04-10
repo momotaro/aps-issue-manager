@@ -24,13 +24,13 @@ import type {
 } from "../../domain/valueObjects/brandedId.js";
 import type { IssueCategory } from "../../domain/valueObjects/issueCategory.js";
 import type { Photo } from "../../domain/valueObjects/photo.js";
-import { confirmedBlobPath } from "../../domain/valueObjects/photo.js";
 import type { Position } from "../../domain/valueObjects/position.js";
 import type {
   DomainErrorDetail,
   Result,
 } from "../../domain/valueObjects/result.js";
 import { err } from "../../domain/valueObjects/result.js";
+import { resolveAttachments } from "./internal/resolveAttachments.js";
 
 // ---------------------------------------------------------------------------
 // 入力型
@@ -78,12 +78,14 @@ export const createIssueUseCase =
   async (
     input: CreateIssueInput,
   ): Promise<Result<CreateIssueOutput, DomainErrorDetail>> => {
-    // 添付写真を confirmed パスに変換
-    const { confirmedAttachments, pendingPhotos } = resolveAttachments(
+    // 添付写真の pending パスを検証し、confirmed パスに変換
+    const resolved = resolveAttachments(
       input.issueId,
       input.comment.commentId,
       input.comment.attachments,
     );
+    if (!resolved.ok) return resolved;
+    const { confirmedAttachments, pendingPhotos } = resolved.value;
 
     // ドメインコマンドで IssueCreated + CommentAdded イベントを生成
     const result = createIssue({
@@ -133,31 +135,3 @@ export const createIssueUseCase =
 
     return { ok: true, value: { issueId: events[0].issueId, events } };
   };
-
-/**
- * pending パスの添付写真を confirmed パスに変換する。
- */
-const resolveAttachments = (
-  issueId: IssueId,
-  commentId: CommentId,
-  attachments?: readonly Photo[],
-): {
-  confirmedAttachments?: readonly Photo[];
-  pendingPhotos: readonly Photo[];
-} => {
-  if (!attachments || attachments.length === 0) {
-    return { confirmedAttachments: undefined, pendingPhotos: [] };
-  }
-
-  const pendingPhotos: Photo[] = [];
-  const confirmedAttachments = attachments.map((photo) => {
-    if (!photo.storagePath.startsWith("pending/")) return photo;
-
-    pendingPhotos.push(photo);
-    const ext = photo.fileName.split(".").pop()?.toLowerCase() ?? "";
-    const confirmedPath = confirmedBlobPath(issueId, commentId, photo.id, ext);
-    return { ...photo, storagePath: confirmedPath };
-  });
-
-  return { confirmedAttachments, pendingPhotos };
-};

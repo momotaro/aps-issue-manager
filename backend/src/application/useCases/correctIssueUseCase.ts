@@ -25,12 +25,12 @@ import type {
 } from "../../domain/valueObjects/brandedId.js";
 import type { IssueStatus } from "../../domain/valueObjects/issueStatus.js";
 import type { Photo } from "../../domain/valueObjects/photo.js";
-import { confirmedBlobPath } from "../../domain/valueObjects/photo.js";
 import type {
   DomainErrorDetail,
   Result,
 } from "../../domain/valueObjects/result.js";
 import { err } from "../../domain/valueObjects/result.js";
+import { resolveAttachments } from "./internal/resolveAttachments.js";
 
 // ---------------------------------------------------------------------------
 // 入力型
@@ -92,12 +92,14 @@ export const correctIssueUseCase =
       current = applyEvent(current, statusResult.value);
     }
 
-    // 添付写真を confirmed パスに変換してイベントに記録する
-    const { confirmedAttachments, pendingPhotos } = resolveAttachments(
+    // 添付写真の pending パスを検証し、confirmed パスに変換してイベントに記録する
+    const resolved = resolveAttachments(
       input.issueId,
       input.comment.commentId,
       input.comment.attachments,
     );
+    if (!resolved.ok) return resolved;
+    const { confirmedAttachments, pendingPhotos } = resolved.value;
 
     // コメント追加（必須）— confirmed パスで記録
     const commentResult = addComment(
@@ -137,32 +139,3 @@ export const correctIssueUseCase =
 
     return { ok: true, value: { events } };
   };
-
-/**
- * pending パスの添付写真を confirmed パスに変換する。
- * イベントには confirmed パスを記録し、Blob 移動用に pending Photo を返す。
- */
-const resolveAttachments = (
-  issueId: IssueId,
-  commentId: CommentId,
-  attachments?: readonly Photo[],
-): {
-  confirmedAttachments?: readonly Photo[];
-  pendingPhotos: readonly Photo[];
-} => {
-  if (!attachments || attachments.length === 0) {
-    return { confirmedAttachments: undefined, pendingPhotos: [] };
-  }
-
-  const pendingPhotos: Photo[] = [];
-  const confirmedAttachments = attachments.map((photo) => {
-    if (!photo.storagePath.startsWith("pending/")) return photo;
-
-    pendingPhotos.push(photo);
-    const ext = photo.fileName.split(".").pop()?.toLowerCase() ?? "";
-    const confirmedPath = confirmedBlobPath(issueId, commentId, photo.id, ext);
-    return { ...photo, storagePath: confirmedPath };
-  });
-
-  return { confirmedAttachments, pendingPhotos };
-};

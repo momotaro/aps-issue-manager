@@ -70,3 +70,33 @@ export const confirmedBlobPath = (
   photoId: string,
   ext: string,
 ): string => `confirmed/${issueId}/${commentId}/${photoId}.${ext}`;
+
+/**
+ * pending パスを解析する。
+ *
+ * @remarks
+ * 形式 `pending/{issueId}/{commentId}/{photoId}.{ext}` と完全一致する場合のみ
+ * 解析結果を返す。ディレクトリ区切りやドットが想定外の位置にある場合は `null`。
+ *
+ * @param storagePath - 検査対象のストレージパス
+ * @returns 解析結果（不一致時は `null`）
+ */
+export const parsePendingPath = (
+  storagePath: string,
+): {
+  issueId: string;
+  commentId: string;
+  photoId: string;
+  ext: string;
+} | null => {
+  const match = /^pending\/([^/]+)\/([^/]+)\/([^/.]+)\.([^/.]+)$/.exec(
+    storagePath,
+  );
+  if (!match) return null;
+  return {
+    issueId: match[1],
+    commentId: match[2],
+    photoId: match[3],
+    ext: match[4],
+  };
+};

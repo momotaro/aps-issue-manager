@@ -84,6 +84,7 @@ describe("addCommentUseCase", () => {
     };
     const useCase = addCommentUseCase(repo, blob);
     const commentId = generateId<CommentId>();
+    const photoId = generateId<PhotoId>();
 
     const result = await useCase({
       issueId: issue.id,
@@ -93,9 +94,9 @@ describe("addCommentUseCase", () => {
         body: "写真を添付します",
         attachments: [
           {
-            id: generateId<PhotoId>(),
+            id: photoId,
             fileName: "photo.jpg",
-            storagePath: `pending/${issue.id}/${commentId}/photo1.jpg`,
+            storagePath: `pending/${issue.id}/${commentId}/${photoId}.jpg`,
             uploadedAt: new Date(),
           },
         ],
@@ -146,6 +147,58 @@ describe("addCommentUseCase", () => {
     expect(result.error.code).toBe("EMPTY_COMMENT");
   });
 
+  it("pending パスの commentId が不一致の場合 INVALID_ATTACHMENT_PATH を返す", async () => {
+    const issue = makeIssue();
+    const repo = mockRepo(issue);
+    const useCase = addCommentUseCase(repo, mockBlobStorage);
+    const commentId = generateId<CommentId>();
+    const otherCommentId = generateId<CommentId>();
+    const photoId = generateId<PhotoId>();
+
+    const result = await useCase({
+      issueId: issue.id,
+      actorId,
+      comment: {
+        commentId,
+        body: "本文",
+        attachments: [
+          {
+            id: photoId,
+            fileName: "photo.jpg",
+            // commentId が異なる pending パスを送る
+            storagePath: `pending/${issue.id}/${otherCommentId}/${photoId}.jpg`,
+            uploadedAt: new Date(),
+          },
+        ],
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe("INVALID_ATTACHMENT_PATH");
+    expect(repo.save).not.toHaveBeenCalled();
+  });
+
+  it("重複する commentId の場合 DUPLICATE_COMMENT を返す", async () => {
+    const issue = makeIssue();
+    const repo = mockRepo(issue);
+    const useCase = addCommentUseCase(repo, mockBlobStorage);
+
+    const result = await useCase({
+      issueId: issue.id,
+      actorId,
+      comment: {
+        commentId: issue.comments[0].commentId,
+        body: "重複コメント",
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe("DUPLICATE_COMMENT");
+    expect(repo.save).not.toHaveBeenCalled();
+  });
+
   it("confirmPending が失敗した場合 CONFIRM_FAILED を返す", async () => {
     const issue = makeIssue();
     const repo = mockRepo(issue);
@@ -155,6 +208,7 @@ describe("addCommentUseCase", () => {
     };
     const useCase = addCommentUseCase(repo, blob);
     const commentId = generateId<CommentId>();
+    const photoId = generateId<PhotoId>();
 
     const result = await useCase({
       issueId: issue.id,
@@ -164,9 +218,9 @@ describe("addCommentUseCase", () => {
         body: "写真添付テスト",
         attachments: [
           {
-            id: generateId<PhotoId>(),
+            id: photoId,
             fileName: "photo.jpg",
-            storagePath: `pending/${issue.id}/${commentId}/photo1.jpg`,
+            storagePath: `pending/${issue.id}/${commentId}/${photoId}.jpg`,
             uploadedAt: new Date(),
           },
         ],
