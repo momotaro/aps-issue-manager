@@ -65,16 +65,25 @@ export function useEditIssueForm(
   const initialValuesRef = useRef(initialValues);
   initialValuesRef.current = initialValues;
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: resetKey はリセットトリガーとして意図的に依存配列に含める
+  // biome-ignore lint/correctness/useExhaustiveDependencies: resetKey と initialValues の各フィールドをトリガーとして意図的に依存配列に含める
   useEffect(() => {
     if (!isOpen) return;
     const vals = initialValuesRef.current;
+    // detail がまだロードされていない場合はスキップ（ロード後に再実行される）
+    if (!vals) return;
     form.reset({
-      title: vals?.title ?? "",
-      category: vals?.category ?? "quality_defect",
-      assigneeId: vals?.assigneeId ?? null,
+      title: vals.title ?? "",
+      category: vals.category ?? "quality_defect",
+      assigneeId: vals.assigneeId ?? null,
     });
-  }, [isOpen, resetKey, form.reset]);
+  }, [
+    isOpen,
+    resetKey,
+    initialValues?.title,
+    initialValues?.category,
+    initialValues?.assigneeId,
+    form.reset,
+  ]);
 
   return form;
 }

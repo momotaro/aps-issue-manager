@@ -20,7 +20,7 @@
  * ActionBar のボタン出し分けは `composer.hooks.ts` の `getComposerActionBarState` に委譲。
  */
 
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useCurrentUser } from "@/components/current-user-provider";
 import { generateBase62Id } from "@/lib/generate-id";
 import type { UserCompany } from "@/lib/mock-users";
@@ -181,8 +181,6 @@ function AddModePanel({
       <PanelHeader title="指摘を追加" statusLabel="新規" onClose={onClose} />
       <IssueForm
         register={form.register as never}
-        watch={form.watch as never}
-        setValue={form.setValue as never}
         errors={form.formState.errors as never}
         mode="add"
       />
@@ -219,6 +217,15 @@ function EditModePanel({
   const { data: detail, isLoading: detailLoading } = useIssueDetail(issueId);
   const { comments, isLoading: commentsLoading } =
     useIssueCommentsTimeline(issueId);
+
+  // 閲覧/編集モード切替
+  const [isEditing, setIsEditing] = useState(false);
+
+  // issueId が変わったら閲覧モードに戻す
+  // biome-ignore lint/correctness/useExhaustiveDependencies: issueId をトリガーに isEditing をリセットする意図
+  useEffect(() => {
+    setIsEditing(false);
+  }, [issueId]);
 
   // draft コメント ID（送信ごとに再生成）
   const [commentIdForDraft, setCommentIdForDraft] = useDraftCommentId();
@@ -264,16 +271,32 @@ function EditModePanel({
 
   const handleSaveMeta = () => {
     form.handleSubmit((values) => {
-      updateIssue.mutate({
-        id: issueId,
-        input: {
-          title: values.title,
-          category: values.category,
-          assigneeId: values.assigneeId ?? null,
+      updateIssue.mutate(
+        {
+          id: issueId,
+          input: {
+            title: values.title,
+            category: values.category,
+            assigneeId: values.assigneeId ?? null,
+          },
+          actorId: currentUser.id,
         },
-        actorId: currentUser.id,
-      });
+        { onSuccess: () => setIsEditing(false) },
+      );
     })();
+  };
+
+  const handleCancel = () => {
+    form.reset(
+      detail
+        ? {
+            title: detail.title,
+            category: detail.category as IssueCategory,
+            assigneeId: detail.assigneeId,
+          }
+        : undefined,
+    );
+    setIsEditing(false);
   };
 
   const handleComposerAction = (action: ComposerAction) => {
@@ -384,14 +407,41 @@ function EditModePanel({
         title="指摘詳細"
         statusLabel={statusLabel}
         onClose={onClose}
-        onSave={handleSaveMeta}
+        actions={
+          isEditing ? (
+            <>
+              <button
+                type="button"
+                onClick={handleCancel}
+                className="text-[11px] text-zinc-500 hover:text-zinc-700"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveMeta}
+                className="text-[11px] text-zinc-600 hover:text-zinc-900"
+              >
+                保存
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setIsEditing(true)}
+              disabled={detailLoading}
+              className="text-[11px] text-zinc-600 hover:text-zinc-900 disabled:opacity-40"
+            >
+              編集
+            </button>
+          )
+        }
       />
       <IssueForm
         register={form.register as never}
-        watch={form.watch as never}
-        setValue={form.setValue as never}
         errors={form.formState.errors as never}
         mode="edit"
+        readOnly={!isEditing}
       />
       <Timeline
         issueId={issueId}
@@ -423,12 +473,12 @@ function PanelHeader({
   title,
   statusLabel,
   onClose,
-  onSave,
+  actions,
 }: {
   title: string;
   statusLabel: string;
   onClose: () => void;
-  onSave?: () => void;
+  actions?: ReactNode;
 }) {
   return (
     <div className="flex items-center justify-between h-12 px-4 border-b border-zinc-200 shrink-0">
@@ -441,15 +491,7 @@ function PanelHeader({
         )}
       </div>
       <div className="flex items-center gap-2">
-        {onSave && (
-          <button
-            type="button"
-            onClick={onSave}
-            className="text-[11px] text-zinc-600 hover:text-zinc-900"
-          >
-            保存
-          </button>
-        )}
+        {actions}
         <button
           type="button"
           onClick={onClose}

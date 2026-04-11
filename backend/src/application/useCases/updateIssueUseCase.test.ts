@@ -218,7 +218,7 @@ describe("updateIssueUseCase", () => {
       expect(repo.save).not.toHaveBeenCalled();
     });
 
-    it("同じ値への更新の場合、NO_CHANGE エラーを返す", async () => {
+    it("同じ値への更新の場合、NO_CHANGES エラーを返す（変更なしはスキップされる）", async () => {
       const issue = makeIssue();
       const repo = mockIssueRepo(issue);
       const useCase = updateIssueUseCase(repo);
@@ -231,7 +231,26 @@ describe("updateIssueUseCase", () => {
 
       expect(result.ok).toBe(false);
       if (result.ok) return;
-      expect(result.error.code).toBe("NO_CHANGE");
+      expect(result.error.code).toBe("NO_CHANGES");
+      expect(repo.save).not.toHaveBeenCalled();
+    });
+
+    it("一部フィールドが変更なしでも、他に変更があれば成功する", async () => {
+      const issue = makeIssue();
+      const repo = mockIssueRepo(issue);
+      const useCase = updateIssueUseCase(repo);
+
+      const result = await useCase({
+        issueId: issue.id,
+        title: "新しいタイトル",
+        category: "quality_defect", // 既存と同じ（スキップされる）
+        actorId,
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.events).toHaveLength(1);
+      expect(result.value.events[0].type).toBe("IssueTitleUpdated");
     });
 
     it("save が失敗した場合、SAVE_FAILED エラーを返す", async () => {

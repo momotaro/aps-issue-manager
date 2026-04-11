@@ -77,25 +77,34 @@ export const updateIssueUseCase =
     // タイトル更新
     if (input.title !== undefined) {
       const result = updateTitle(current, input.title, input.actorId);
-      if (!result.ok) return result;
-      events.push(result.value);
-      current = applyEvent(current, result.value);
+      if (!result.ok) {
+        if (result.error.code !== "NO_CHANGE") return result;
+      } else {
+        events.push(result.value);
+        current = applyEvent(current, result.value);
+      }
     }
 
     // 種別変更
     if (input.category !== undefined) {
       const result = changeCategory(current, input.category, input.actorId);
-      if (!result.ok) return result;
-      events.push(result.value);
-      current = applyEvent(current, result.value);
+      if (!result.ok) {
+        if (result.error.code !== "NO_CHANGE") return result;
+      } else {
+        events.push(result.value);
+        current = applyEvent(current, result.value);
+      }
     }
 
     // 担当者変更
     if (input.assigneeId !== undefined) {
       const result = changeAssignee(current, input.assigneeId, input.actorId);
-      if (!result.ok) return result;
-      events.push(result.value);
-      current = applyEvent(current, result.value);
+      if (!result.ok) {
+        if (result.error.code !== "NO_CHANGE") return result;
+      } else {
+        events.push(result.value);
+        current = applyEvent(current, result.value);
+      }
     }
 
     // 変更がない場合

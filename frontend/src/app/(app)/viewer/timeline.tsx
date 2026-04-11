@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Timeline — 指摘のやり取り（コメント一覧）を昇順チャット型で表示する。
+ * Timeline — 指摘のコメント・履歴を昇順チャット型で表示する。
  *
  * @remarks
  * #34 時点では `GET /api/issues/:id` の `recentComments`（最新 5 件）のみを扱う。
@@ -58,7 +58,7 @@ export function Timeline({ comments, isLoading }: TimelineProps) {
   return (
     <div className="flex flex-col flex-1 min-h-0">
       <div className="flex items-center justify-between h-9 px-4 text-[12px]">
-        <span className="font-medium text-zinc-600">やり取り</span>
+        <span className="font-medium text-zinc-600">コメント・履歴</span>
         <span className="text-[11px] text-zinc-400">{comments.length}件</span>
       </div>
       <div
