@@ -14,6 +14,7 @@ vi.mock("@/repositories/issue-repository", () => ({
     createIssue: vi.fn(),
     getIssues: vi.fn(),
     getIssueDetail: vi.fn(),
+    getIssueHistory: vi.fn(),
   },
 }));
 
@@ -89,6 +90,9 @@ describe("issues-state.hooks mutation invalidation", () => {
       expect(invalidateSpy).toHaveBeenCalledWith({
         queryKey: ["issue-detail", "issue1"],
       });
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: ["issue-history", "issue1"],
+      });
     });
   });
 
@@ -113,6 +117,9 @@ describe("issues-state.hooks mutation invalidation", () => {
 
     await waitFor(() => {
       expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["issues"] });
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: ["issue-history", "issue1"],
+      });
     });
   });
 
@@ -134,6 +141,9 @@ describe("issues-state.hooks mutation invalidation", () => {
 
     await waitFor(() => {
       expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["issues"] });
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: ["issue-history", "issue1"],
+      });
     });
     expect(issueRepository.addComment).toHaveBeenCalledWith(
       "issue1",

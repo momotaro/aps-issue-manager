@@ -18,6 +18,7 @@ import {
   issueRepository,
 } from "@/repositories/issue-repository";
 import { ISSUE_DETAIL_KEY } from "./issue-detail.hooks";
+import { ISSUE_HISTORY_KEY } from "./issue-history.hooks";
 import type { IssueCategory, IssuePin, IssueStatus } from "./types";
 
 const ISSUES_QUERY_KEY = ["issues"] as const;
@@ -123,6 +124,7 @@ export function useCorrectIssue() {
     onSuccess: (_data, { id }) => {
       queryClient.invalidateQueries({ queryKey: ISSUES_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: ISSUE_DETAIL_KEY(id) });
+      queryClient.invalidateQueries({ queryKey: ISSUE_HISTORY_KEY(id) });
     },
   });
 }
@@ -150,6 +152,7 @@ export function useReviewIssue() {
     onSuccess: (_data, { id }) => {
       queryClient.invalidateQueries({ queryKey: ISSUES_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: ISSUE_DETAIL_KEY(id) });
+      queryClient.invalidateQueries({ queryKey: ISSUE_HISTORY_KEY(id) });
     },
   });
 }
@@ -182,6 +185,7 @@ export function useAddComment() {
     onSuccess: (_data, { id }) => {
       queryClient.invalidateQueries({ queryKey: ISSUES_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: ISSUE_DETAIL_KEY(id) });
+      queryClient.invalidateQueries({ queryKey: ISSUE_HISTORY_KEY(id) });
     },
   });
 }

@@ -1,9 +1,16 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import type { CommentItem } from "@/repositories/issue-repository";
+import type {
+  CommentTimelineItem,
+  StatusChangeTimelineItem,
+  TimelineItem,
+} from "./issue-history.hooks";
 import { Timeline } from "./timeline";
 
-const makeComment = (overrides: Partial<CommentItem> = {}): CommentItem => ({
+const makeCommentItem = (
+  overrides: Partial<CommentTimelineItem> = {},
+): CommentTimelineItem => ({
+  type: "comment",
   commentId: "c000000000000000000001",
   body: "テストコメント",
   actorId: "000000002dwHTRTFRxWLTN",
@@ -12,31 +19,43 @@ const makeComment = (overrides: Partial<CommentItem> = {}): CommentItem => ({
   ...overrides,
 });
 
+const makeStatusChangeItem = (
+  overrides: Partial<StatusChangeTimelineItem> = {},
+): StatusChangeTimelineItem => ({
+  type: "statusChange",
+  eventId: "evt0000001",
+  actorName: "田中 太郎",
+  toLabel: "対応中",
+  toStatus: "in_progress",
+  occurredAt: "2026-04-10T10:00:00.000Z",
+  ...overrides,
+});
+
 describe("Timeline", () => {
-  it("コメントがない場合は空メッセージを表示する", () => {
-    render(<Timeline issueId="i1" comments={[]} isLoading={false} />);
+  it("アイテムがない場合は空メッセージを表示する", () => {
+    render(<Timeline issueId="i1" items={[]} isLoading={false} />);
     expect(screen.getByText("まだコメントがありません")).toBeDefined();
   });
 
-  it("コメントを昇順で全件表示する", () => {
-    const comments: CommentItem[] = [
-      makeComment({
+  it("コメントアイテムを全件表示する", () => {
+    const items: TimelineItem[] = [
+      makeCommentItem({
         commentId: "c1",
         body: "最初のコメント",
         createdAt: "2026-04-08T14:00:00.000Z",
       }),
-      makeComment({
+      makeCommentItem({
         commentId: "c2",
         body: "2 番目のコメント",
         createdAt: "2026-04-09T09:15:00.000Z",
       }),
-      makeComment({
+      makeCommentItem({
         commentId: "c3",
         body: "最新のコメント",
         createdAt: "2026-04-10T16:30:00.000Z",
       }),
     ];
-    render(<Timeline issueId="i1" comments={comments} isLoading={false} />);
+    render(<Timeline issueId="i1" items={items} isLoading={false} />);
     expect(screen.getByText("最初のコメント")).toBeDefined();
     expect(screen.getByText("2 番目のコメント")).toBeDefined();
     expect(screen.getByText("最新のコメント")).toBeDefined();
@@ -45,19 +64,17 @@ describe("Timeline", () => {
 
   it("XSS: <script> タグ文字列は DOM に挿入されずエスケープされる", () => {
     const malicious = '<script>alert("xss")</script>悪意あるコメント';
-    const comments: CommentItem[] = [makeComment({ body: malicious })];
+    const items: TimelineItem[] = [makeCommentItem({ body: malicious })];
     const { container } = render(
-      <Timeline issueId="i1" comments={comments} isLoading={false} />,
+      <Timeline issueId="i1" items={items} isLoading={false} />,
     );
-    // React がテキストとしてエスケープしているため script 要素は生成されない
     expect(container.querySelector("script")).toBeNull();
-    // 文字列としては存在する
     expect(screen.getByText(malicious)).toBeDefined();
   });
 
   it("添付画像がある場合はサムネイルボタンを表示する", () => {
-    const comments: CommentItem[] = [
-      makeComment({
+    const items: TimelineItem[] = [
+      makeCommentItem({
         attachments: [
           {
             id: "p000000000000000000001",
@@ -69,7 +86,32 @@ describe("Timeline", () => {
         ],
       }),
     ];
-    render(<Timeline issueId="i1" comments={comments} isLoading={false} />);
+    render(<Timeline issueId="i1" items={items} isLoading={false} />);
     expect(screen.getByLabelText("添付画像: photo.jpg")).toBeDefined();
+  });
+
+  it("ステータス変更アイテムを pill 形式で表示する", () => {
+    const items: TimelineItem[] = [
+      makeStatusChangeItem({
+        actorName: "田中 太郎",
+        toLabel: "是正完了",
+        toStatus: "done",
+      }),
+    ];
+    render(<Timeline issueId="i1" items={items} isLoading={false} />);
+    expect(
+      screen.getByText("田中 太郎が 是正完了 に変更しました"),
+    ).toBeDefined();
+  });
+
+  it("コメントとステータス変更が混在表示される", () => {
+    const items: TimelineItem[] = [
+      makeCommentItem({ commentId: "c1", body: "是正します" }),
+      makeStatusChangeItem({ toLabel: "対応中", toStatus: "in_progress" }),
+    ];
+    render(<Timeline issueId="i1" items={items} isLoading={false} />);
+    expect(screen.getByText("是正します")).toBeDefined();
+    expect(screen.getByText("田中 太郎が 対応中 に変更しました")).toBeDefined();
+    expect(screen.getByText("2件")).toBeDefined();
   });
 });

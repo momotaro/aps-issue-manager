@@ -4,15 +4,19 @@
  * Timeline — 指摘のコメント・履歴を昇順チャット型で表示する。
  *
  * @remarks
- * #34 時点では `GET /api/issues/:id` の `recentComments`（最新 5 件）のみを扱う。
- * 古いコメントの遅延読み込みは follow-up Issue で実装する。
+ * `useIssueTimeline` が返す `TimelineItem[]` を受け取り、
+ * `comment` はチャット形式、`statusChange` は pill 形式で表示する。
  *
- * 新規コメント追加後（`comments.length` 増加時）は自動で最下部にスクロールする。
+ * 新規アイテム追加後（`items.length` 増加時）は自動で最下部にスクロールする。
  */
 
 import { useEffect, useRef, useState } from "react";
 import { findMockUserById } from "@/lib/mock-users";
-import type { CommentItem } from "@/repositories/issue-repository";
+import type {
+  CommentTimelineItem,
+  StatusChangeTimelineItem,
+  TimelineItem,
+} from "./issue-history.hooks";
 import {
   type LightboxPhoto,
   PhotoLightbox,
@@ -21,24 +25,24 @@ import {
 
 type TimelineProps = {
   issueId: string;
-  comments: readonly CommentItem[];
+  items: readonly TimelineItem[];
   isLoading: boolean;
 };
 
-export function Timeline({ comments, isLoading }: TimelineProps) {
+export function Timeline({ items, isLoading }: TimelineProps) {
   const listRef = useRef<HTMLDivElement>(null);
-  const prevCountRef = useRef(comments.length);
+  const prevCountRef = useRef(items.length);
 
   // 初期表示および新規追加時に最下部へスクロール
   useEffect(() => {
     const el = listRef.current;
     if (!el) return;
-    const isNewComment = comments.length > prevCountRef.current;
-    if (isNewComment || prevCountRef.current === 0) {
+    const isNewItem = items.length > prevCountRef.current;
+    if (isNewItem || prevCountRef.current === 0) {
       el.scrollTop = el.scrollHeight;
     }
-    prevCountRef.current = comments.length;
-  }, [comments.length]);
+    prevCountRef.current = items.length;
+  }, [items.length]);
 
   // lightbox 状態
   const [lightboxPhotos, setLightboxPhotos] = useState<
@@ -46,7 +50,10 @@ export function Timeline({ comments, isLoading }: TimelineProps) {
   >(null);
   const [lightboxIndex, setLightboxIndex] = useState(0);
 
-  const openLightbox = (comment: CommentItem, attachmentIndex: number) => {
+  const openLightbox = (
+    comment: CommentTimelineItem,
+    attachmentIndex: number,
+  ) => {
     const photos = comment.attachments.map((a) =>
       toLightboxPhotoFromStoragePath(a.id, a.fileName, a.storagePath),
     );
@@ -59,29 +66,33 @@ export function Timeline({ comments, isLoading }: TimelineProps) {
     <div className="flex flex-col flex-1 min-h-0">
       <div className="flex items-center justify-between h-9 px-4 text-[12px]">
         <span className="font-medium text-zinc-600">コメント・履歴</span>
-        <span className="text-[11px] text-zinc-400">{comments.length}件</span>
+        <span className="text-[11px] text-zinc-400">{items.length}件</span>
       </div>
       <div
         ref={listRef}
         className="flex-1 min-h-0 overflow-y-auto px-4 pb-4 pt-1 flex flex-col gap-4"
       >
-        {isLoading && comments.length === 0 && (
+        {isLoading && items.length === 0 && (
           <p className="text-xs text-zinc-400 text-center py-4">
             読み込み中...
           </p>
         )}
-        {!isLoading && comments.length === 0 && (
+        {!isLoading && items.length === 0 && (
           <p className="text-xs text-zinc-400 text-center py-4">
             まだコメントがありません
           </p>
         )}
-        {comments.map((c) => (
-          <CommentItemView
-            key={c.commentId}
-            comment={c}
-            onAttachmentClick={(idx) => openLightbox(c, idx)}
-          />
-        ))}
+        {items.map((item) =>
+          item.type === "comment" ? (
+            <CommentItemView
+              key={item.commentId}
+              comment={item}
+              onAttachmentClick={(idx) => openLightbox(item, idx)}
+            />
+          ) : (
+            <StatusChangeItemView key={item.eventId} item={item} />
+          ),
+        )}
       </div>
 
       {lightboxPhotos && (
@@ -96,11 +107,15 @@ export function Timeline({ comments, isLoading }: TimelineProps) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// コメント行
+// ---------------------------------------------------------------------------
+
 function CommentItemView({
   comment,
   onAttachmentClick,
 }: {
-  comment: CommentItem;
+  comment: CommentTimelineItem;
   onAttachmentClick: (attachmentIndex: number) => void;
 }) {
   const user = findMockUserById(comment.actorId);
@@ -157,5 +172,80 @@ function CommentItemView({
         </div>
       </div>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ステータス変更行（pill スタイル）
+// ---------------------------------------------------------------------------
+
+function StatusChangeItemView({ item }: { item: StatusChangeTimelineItem }) {
+  return (
+    <div className="flex items-center gap-2 text-[11px] text-zinc-500">
+      <div className="h-px flex-1 bg-zinc-200" />
+      <div className="flex items-center gap-1 rounded-full border border-zinc-200 bg-zinc-100 px-2.5 py-1">
+        <StatusChangeIcon toStatus={item.toStatus} />
+        <span>
+          {item.actorName}が {item.toLabel} に変更しました
+        </span>
+      </div>
+      <div className="h-px flex-1 bg-zinc-200" />
+    </div>
+  );
+}
+
+function StatusChangeIcon({ toStatus }: { toStatus: string }) {
+  if (toStatus === "done") {
+    return (
+      <svg
+        className="h-3 w-3 shrink-0"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2}
+        aria-hidden="true"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+        />
+      </svg>
+    );
+  }
+  if (toStatus === "in_progress" || toStatus === "in_review") {
+    return (
+      <svg
+        className="h-3 w-3 shrink-0"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2}
+        aria-hidden="true"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"
+        />
+      </svg>
+    );
+  }
+  // open（差し戻し等）: 戻る矢印
+  return (
+    <svg
+      className="h-3 w-3 shrink-0"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+      aria-hidden="true"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3"
+      />
+    </svg>
   );
 }

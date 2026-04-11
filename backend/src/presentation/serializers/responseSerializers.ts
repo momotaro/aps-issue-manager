@@ -83,12 +83,41 @@ const serializePayloadValue = (
   return value;
 };
 
-export const serializeIssueEvent = (event: IssueDomainEvent) => ({
-  id: uuidToBase62(event.id),
-  issueId: uuidToBase62(event.issueId),
-  type: event.type,
-  payload: serializePayloadValue(undefined, event.payload),
-  actorId: uuidToBase62(event.actorId),
-  version: event.version,
-  occurredAt: event.occurredAt.toISOString(),
-});
+export const serializeIssueEvent = (event: IssueDomainEvent) => {
+  const base = {
+    id: uuidToBase62(event.id),
+    issueId: uuidToBase62(event.issueId),
+    type: event.type,
+    actorId: uuidToBase62(event.actorId),
+    version: event.version,
+    occurredAt: event.occurredAt.toISOString(),
+  };
+
+  if (event.type === "CommentAdded") {
+    // serializePayloadValue は storagePath を除外するため個別シリアライズする。
+    // storagePath は lightbox 表示（フロントエンドの URL 組み立て）に必要。
+    const { comment } = event.payload;
+    return {
+      ...base,
+      payload: {
+        comment: {
+          commentId: uuidToBase62(comment.commentId),
+          body: comment.body,
+          actorId: uuidToBase62(comment.actorId),
+          attachments: comment.attachments.map((p) => ({
+            id: uuidToBase62(p.id),
+            fileName: p.fileName,
+            storagePath: p.storagePath,
+            uploadedAt: p.uploadedAt.toISOString(),
+          })),
+          createdAt: comment.createdAt.toISOString(),
+        },
+      },
+    };
+  }
+
+  return {
+    ...base,
+    payload: serializePayloadValue(undefined, event.payload),
+  };
+};

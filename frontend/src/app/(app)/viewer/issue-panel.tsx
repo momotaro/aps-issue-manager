@@ -24,12 +24,12 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useCurrentUser } from "@/components/current-user-provider";
 import { generateBase62Id } from "@/lib/generate-id";
 import type { UserCompany } from "@/lib/mock-users";
-import { useIssueCommentsTimeline } from "./comments.hooks";
 import { Composer } from "./composer";
 import type { ComposerAction } from "./composer.hooks";
 import { useIssueDetail } from "./issue-detail.hooks";
 import { IssueForm } from "./issue-form";
 import { useAddIssueForm, useEditIssueForm } from "./issue-form.hooks";
+import { useIssueTimeline } from "./issue-history.hooks";
 import {
   useAddComment,
   useCorrectIssue,
@@ -215,8 +215,7 @@ function EditModePanel({
 }) {
   const { currentUser } = useCurrentUser();
   const { data: detail, isLoading: detailLoading } = useIssueDetail(issueId);
-  const { comments, isLoading: commentsLoading } =
-    useIssueCommentsTimeline(issueId);
+  const { items, isLoading: historyLoading } = useIssueTimeline(issueId);
 
   // 閲覧/編集モード切替
   const [isEditing, setIsEditing] = useState(false);
@@ -443,11 +442,7 @@ function EditModePanel({
         mode="edit"
         readOnly={!isEditing}
       />
-      <Timeline
-        issueId={issueId}
-        comments={comments}
-        isLoading={commentsLoading}
-      />
+      <Timeline issueId={issueId} items={items} isLoading={historyLoading} />
       <Composer
         mode="edit"
         status={status}

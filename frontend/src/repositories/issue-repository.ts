@@ -3,6 +3,18 @@ import { apiClient } from "@/lib/api-client";
 import type { IssueCategory, IssueStatus } from "@/types/issue";
 
 // ---------------------------------------------------------------------------
+// 履歴 API 型定義
+// ---------------------------------------------------------------------------
+
+type HistoryApi = (typeof apiClient.api.issues)[":id"]["history"];
+
+/** GET /api/issues/:id/history のレスポンス要素（イベント1件）。AppType から導出。 */
+export type IssueHistoryEvent = Extract<
+  InferResponseType<HistoryApi["$get"]>,
+  readonly unknown[]
+>[number];
+
+// ---------------------------------------------------------------------------
 // 型定義（hono/rpc から導出）
 // ---------------------------------------------------------------------------
 
@@ -173,6 +185,18 @@ export const createIssueRepository = (client: Client) => ({
     );
     if (!res.ok) throw new Error("Failed to add comment");
     return (await res.json()) as { ok: true };
+  },
+
+  getIssueHistory: async (
+    id: string,
+  ): Promise<readonly IssueHistoryEvent[]> => {
+    const res = await client.api.issues[":id"].history.$get(
+      { param: { id } },
+      { init: defaultFetchOptions },
+    );
+    if (!res.ok) throw new Error("Failed to fetch issue history");
+    const data = (await res.json()) as unknown;
+    return data as readonly IssueHistoryEvent[];
   },
 
   generatePhotoUploadUrl: async (
