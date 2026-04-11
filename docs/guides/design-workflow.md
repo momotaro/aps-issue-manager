@@ -26,15 +26,17 @@
 - コンポーネントごとの .pen は作らない
 
 ```
-frontend/src/app/issues/
+frontend/src/app/(app)/viewer/
 ├── page.tsx          # ページ実装
 ├── page.pen          # ページデザイン（ソースオブトゥルース）
-└── _components/
-    ├── IssueFilter.tsx
-    ├── IssueFilter.hooks.tsx
-    ├── IssueList.tsx
-    └── IssueList.hooks.tsx
+├── issue-panel.tsx
+├── issue-filter.tsx
+├── timeline.tsx
+├── composer.tsx
+└── photo-lightbox.tsx
 ```
+
+（本プロジェクトでは `_components/` は使わず、viewer 配下に UI とフックをフラットに配置している。）
 
 #### なぜコンポーネントごとに作らないのか
 
@@ -48,11 +50,14 @@ frontend/src/app/issues/
 
 ```
 page.pen 内のノード構造:
-├── IssueFilter       ← IssueFilter.tsx に対応
+├── IssueFilter       ← issue-filter.tsx に対応
 │   ├── StatusSelect
 │   └── AssigneeSelect
-└── IssueList         ← IssueList.tsx に対応
-    └── IssueCard
+├── IssueListPanel    ← issue-list-panel.tsx に対応
+│   └── IssueCard
+└── IssuePanel        ← issue-panel.tsx に対応
+    ├── Timeline
+    └── Composer
 ```
 
 ### 4. .pen 内の reusable コンポーネント

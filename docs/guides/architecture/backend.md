@@ -33,8 +33,8 @@ type IssueRepository = {
 
 // domain/services/blobStorage.ts
 type BlobStorage = {
-    generateUploadUrl: (issueId: string, commentId: string, photoId: string, fileName: string) => Promise<{ uploadUrl: string }>;
-    confirmPending: (issueId: string, commentId: string, photos: Photo[]) => Promise<readonly Photo[]>;
+    generateUploadUrl: (issueId: string, commentId: string, photoId: string, fileName: string) => Promise<{ uploadUrl: string; storagePath: string }>;
+    confirmPending: (issueId: string, photos: readonly Photo[]) => Promise<readonly Photo[]>;
     deleteByIssue: (issueId: string) => Promise<void>;
     deletePhoto: (storagePath: string) => Promise<void>;
 };
@@ -53,7 +53,7 @@ const initIssueUseCases = (
         const issue = Issue.create(input);
         await repo.save(issue);
         if (input.comment.attachments?.length) {
-            await storage.confirmPending(issue.id, input.comment.commentId, input.comment.attachments);
+            await storage.confirmPending(issue.id, input.comment.attachments);
         }
         return issue;
     },
