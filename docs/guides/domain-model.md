@@ -6,13 +6,13 @@
 
 ```mermaid
 graph TD
-  subgraph "集約（イベントソーシング）"
-    Issue["Issue 集約"]
-    Comment["Comment（値オブジェクト）"]
-    Photo["Photo（値オブジェクト）"]
-    Position["Position（値オブジェクト）"]
-    Status["IssueStatus（値オブジェクト）"]
-    Category["IssueCategory（値オブジェクト）"]
+  subgraph aggregate["Issue 集約 境界（イベントソーシング）"]
+    Issue["<b>Issue</b><br/>«Aggregate Root»"]
+    Comment["Comment<br/>«値オブジェクト»"]
+    Photo["Photo<br/>«値オブジェクト»"]
+    Position["Position<br/>«値オブジェクト»"]
+    Status["IssueStatus<br/>«値オブジェクト»"]
+    Category["IssueCategory<br/>«値オブジェクト»"]
     Issue -->|"1..* 所有"| Comment
     Comment -->|"0..* 所有"| Photo
     Issue -->|"1 所有"| Position
@@ -20,15 +20,36 @@ graph TD
     Issue -->|"1 所有"| Category
   end
 
-  subgraph "エンティティ（CRUD）"
-    User["User"]
-    Project["Project"]
+  subgraph entities["独立エンティティ（CRUD）"]
+    User["User<br/>«エンティティ»"]
+    Project["Project<br/>«エンティティ»"]
   end
 
-  Issue -->|"projectId"| Project
-  Issue -->|"reporterId"| User
-  Issue -->|"assigneeId（nullable）"| User
+  Issue -.->|"projectId（ID 参照のみ）"| Project
+  Issue -.->|"reporterId（ID 参照のみ）"| User
+  Issue -.->|"assigneeId（ID 参照のみ, nullable）"| User
+
+  classDef aggregateRoot fill:#fde68a,stroke:#f59e0b,stroke-width:3px,color:#000
+  classDef valueObject fill:#e0e7ff,stroke:#6366f1,color:#000
+  classDef entity fill:#d1fae5,stroke:#10b981,color:#000
+  class Issue aggregateRoot
+  class Comment,Photo,Position,Status,Category valueObject
+  class User,Project entity
+
+  style aggregate fill:#fef3c7,stroke:#f59e0b,stroke-width:2px,stroke-dasharray: 8 4
+  style entities fill:#ecfdf5,stroke:#10b981,stroke-width:1px
 ```
+
+**凡例**
+
+| 記号 | 意味 |
+|---|---|
+| 黄色・太枠・破線の囲み | **集約境界**。この内側はトランザクション整合性の単位（1 トランザクション = 1 集約更新） |
+| 黄色ノード（Issue） | **集約ルート**。集約への参照・更新は必ずこのノード経由 |
+| 青ノード | **値オブジェクト**。不変・置き換えのみ。集約ルートに所有される |
+| 緑ノード | **独立エンティティ**。集約外で CRUD される |
+| 実線矢印（`-->`） | 所有関係（集約境界内の強い包含） |
+| 破線矢印（`-.->`） | **境界を越える参照**。他集約は ID でのみ参照し、同一トランザクションで更新しない |
 
 ### 永続化方式の使い分け
 
@@ -41,6 +62,56 @@ graph TD
 ---
 
 ## 2. ER 図（物理テーブル）
+
+### 2.1 テーブル分類（CQRS 視点）
+
+物理テーブルを Command 側 / Query 側 / マスタに分類する。これにより「どのテーブルに書き込み、どのテーブルから読むか」の責務が一目で分かる。
+
+```mermaid
+flowchart LR
+  subgraph write["Command 側（Write Model）"]
+    direction TB
+    ie["issue_events<br/>（イベントストア・追記専用）"]
+    isn["issue_snapshots<br/>（集約スナップショット）"]
+  end
+
+  subgraph read["Query 側（Read Model）"]
+    direction TB
+    ir["issues_read<br/>（非正規化・投影結果）"]
+    cm["comments<br/>（コメント本体）"]
+  end
+
+  subgraph master["マスタ（CRUD）"]
+    direction TB
+    us["users"]
+    pr["projects"]
+  end
+
+  ie -.->|"EventProjector<br/>が同期投影"| ir
+  ie -.->|"CommentAdded を<br/>展開して挿入"| cm
+  ir -.->|"recent_comments に<br/>最新5件キャッシュ"| cm
+
+  classDef writeCls fill:#fee2e2,stroke:#ef4444,stroke-width:2px,color:#000
+  classDef readCls fill:#dbeafe,stroke:#3b82f6,stroke-width:2px,color:#000
+  classDef masterCls fill:#d1fae5,stroke:#10b981,stroke-width:2px,color:#000
+  class ie,isn writeCls
+  class ir,cm readCls
+  class us,pr masterCls
+
+  style write fill:#fef2f2,stroke:#ef4444,stroke-width:2px,stroke-dasharray: 5 5
+  style read fill:#eff6ff,stroke:#3b82f6,stroke-width:2px,stroke-dasharray: 5 5
+  style master fill:#ecfdf5,stroke:#10b981,stroke-width:1px
+```
+
+**凡例**
+
+| 区分 | 色 | 役割 | 更新方針 |
+|---|---|---|---|
+| Command 側 | 赤 | ドメインイベントを追記保存。ソースオブトゥルース | Append only（UPDATE / DELETE 禁止） |
+| Query 側 | 青 | イベントから投影された非正規化ビュー。クエリ専用 | EventProjector が同期投影（再構築可） |
+| マスタ | 緑 | CRUD で管理する参照データ | 通常の INSERT / UPDATE / DELETE |
+
+### 2.2 詳細 ER
 
 ```mermaid
 erDiagram

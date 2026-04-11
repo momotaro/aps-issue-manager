@@ -67,6 +67,11 @@ pnpm --filter backend test:watch
 
 # カバレッジ
 npx vitest run --coverage
+
+# データ管理
+pnpm -w data:seed      # ダミーデータ投入（128件、冪等）
+pnpm -w data:clear     # 全データ削除
+pnpm -w data:migrate   # DBマイグレーション実行
 ```
 
 ## ポート一覧

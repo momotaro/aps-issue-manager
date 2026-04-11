@@ -20,65 +20,44 @@
 
 ## 2. 認証・認可
 
-### 現状（mock ユーザー）
+現在は mock ユーザー（監督会社 / 協力会社）による切り替え方式で、認証基盤は未導入。
+フロントエンドの Composer 状態×ロール判定は UX のためであり、**セキュリティ境界ではない**。
 
-- 認証なし。`frontend/src/lib/mock-users.ts` に 2 名の mock ユーザー（監督会社 / 協力会社）を定義
-- `useCurrentUser()`（`frontend/src/components/current-user-provider.tsx` の React Context + `localStorage`）で切り替え、UserSwitcher UI で操作者を選択
-- Repository から `actorId` を body に含めて送信する暫定実装
-- **重要**: 現 UI のボタン出し分け（Composer の状態×ロール判定）は UX のためであり、**セキュリティ境界ではない**。クライアントが直接 API を叩けばロールを迂回できる
+### 認証基盤の導入
 
-### 追加する場合の設計
+- Backend に Hono middleware で JWT 認証（Auth0 / Cognito / Firebase Auth 等）を追加
+- ユーザー情報を Hono Context に注入し useCase に渡す
+- `actorId` をリクエスト body から廃止し、middleware のセッションから取得する方式に変更
+- Composer の状態×ロール判定を backend 側でも強制し、UI 迂回を防ぐ
+- 差し替えポイント: `frontend/src/lib/mock-users.ts` / `frontend/src/components/current-user-provider.tsx` / `frontend/src/repositories/issue-repository.ts` の `actorId` 送信箇所（`TODO(auth)` コメント）
+- APS の 2-legged OAuth はサーバー間認証でありユーザー認証とは独立。認証を追加しても APS トークン取得フローは変わらない
 
-- Backend に認証ミドルウェアを追加（Hono middleware）
-- JWT ベースの認証（Auth0 / Cognito / Firebase Auth 等）
-- ユーザー情報を Context に注入し、useCase に渡す
-- Issue に `createdBy`, `assignedTo` を追加
+### 未対応の強化項目
 
-### APS トークンとの関係
-
-- APS の 2-legged OAuth はサーバー間認証（ユーザー認証とは独立）
-- ユーザー認証を追加しても、APS トークン取得フローは変わらない
-
-### follow-up Issue として切り出し予定のスコープ
-
-#34（フロントエンドのユースケース指向 API 対応）の範囲外として、以下を独立 Issue で扱う:
-
-1. **認可ミドルウェア + `actorId` 廃止**
-   - backend に認証/認可ミドルウェアを導入し、ロールガード（IDOR 対策含む）を追加
-   - `actorId` をリクエスト body から廃止し、middleware のセッションから取得する方式に変更
-   - Composer の状態×ロール判定を backend 側でも強制し、UI 迂回を防ぐ
-   - 差し替えポイント: `frontend/src/lib/mock-users.ts` / `frontend/src/components/current-user-provider.tsx` / `frontend/src/repositories/issue-repository.ts` の `actorId` 送信箇所（`TODO(auth)` コメント）
-
-2. **Timeline コメントページネーション**
+1. **Timeline コメントページネーション**
    - `GET /:id/comments?before=<ISO8601>&limit=<n>` エンドポイントを新設
    - `IssueQueryService.findCommentsBefore(issueId, before, limit)` を追加
    - `listOlderCommentsUseCase` を追加
    - フロント: `useIssueCommentsTimeline` に `hasMore` / `loadOlder()` を追加し、Timeline に LoadMore ボタンと loadOlder 後のスクロール位置維持を実装
-   - `.pen` に `LoadMore` ノードを復活
-   - #34 時点では `getIssueDetail.recentComments`（最新 5 件）のみ表示
 
-3. **EXIF ストリップ**
+2. **EXIF ストリップ**
    - 写真アップロード時（backend confirm フェーズ）に位置情報等の EXIF をサーバ側で除去
    - プライバシー対策
 
-4. **Presigned URL の MIME / サイズ制約**
-   - backend の presigned URL 発行時に `Content-Type` と `Content-Length` 制約を付与
-   - 任意バイナリや過大サイズの投入をブロック
+3. **Presigned URL のサイズ制約**
+   - MIME 型チェック（jpg / png / webp / gif / heic）は実装済み
+   - `Content-Length` 制約を追加し、過大サイズの投入をブロック
 
 ## 3. マルチユーザー対応
 
-### 実装済み
+User / Project エンティティ、Issue への projectId / reporterId / assigneeId 組み込み、
+楽観的同時実行制御（イベントの `version` フィールド）は実装済み。
 
-- **User エンティティ**: `domain/entities/user.ts`（admin / manager / member ロール）
-- **Project エンティティ**: `domain/entities/project.ts`（modelUrn で APS 3Dモデルと紐付け）
-- **Issue 集約に projectId / reporterId / assigneeId を組み込み済み**
-- **楽観的同時実行制御**: イベントソーシングの `version` フィールドで実現済み
+### 未対応
 
-### 未実装（将来対応）
-
-- ユーザーとプロジェクトの紐付け（RBAC）
-- Blob パスにプロジェクトIDを含める: `confirmed/{projectId}/{issueId}/`
-- 認証基盤（JWT）との統合
+- **RBAC**: ユーザーとプロジェクトの紐付け、バックエンドでのロールベース権限チェック
+- **Blob パスへの projectId 追加**: `confirmed/{projectId}/{issueId}/`（IAM プレフィックス認可・一括削除・Lifecycle 配賦に有効）
+- **認証基盤（JWT）との統合**: セクション 2 参照
 
 ## 4. 大量データ対応
 
@@ -123,7 +102,7 @@ Lambda + CQRS のようなスケーラブル構成でも、DB やストレージ
 - 全件取得 → `updated_at` 以降のみ取得に切り替え
 - バックエンドに `GET /api/issues?since={ISO8601}` パラメータを追加
 - TanStack Query の `staleTime` と組み合わせ、初回以降の通信量を削減
-- **前提**: DB スキーマに `updated_at` カラムを初期から組み込み済み
+- **前提**: DB スキーマに `updated_at` カラム組み込み済み
 
 **Phase 2: IndexedDB キャッシュ（〜数万件）**
 
@@ -141,12 +120,8 @@ Lambda + CQRS のようなスケーラブル構成でも、DB やストレージ
 
 ## 5. 全文検索
 
-### 現状（ILIKE 部分一致）
-
-- `GET /api/issues?q=keyword` でタイトル・説明を `ILIKE %keyword%` で部分一致検索
-- PostgreSQL のネイティブ機能のみで実現（追加インフラ不要）
-- 小〜中規模データ（数千件程度）では十分なパフォーマンス
-- ワイルドカード文字（`%`, `_`）はアプリケーション層でエスケープ済み
+現在は `ILIKE %keyword%` による部分一致検索（ワイルドカードエスケープ済み）。
+小〜中規模データ（数千件程度）では十分だが、以下の課題がある。
 
 ### 課題
 
@@ -165,11 +140,32 @@ Lambda + CQRS のようなスケーラブル構成でも、DB やストレージ
   4. EventProjector に検索インデックス更新ロジックを追加
 - `pg_trgm` 拡張による GIN インデックスも中間策として検討可能
 
-### Entity ID 戦略
+## 6. ISR / Edge Runtime の適用方針
 
-- 全エンティティの ID に **UUID v7** を採用
-- 時刻順ソート可能（UUID v4 と異なりインデックス効率が良い）
-- クライアント側で生成可能 → 将来のオフライン対応・楽観的 UI に対応
-- PostgreSQL では `UUID` 型で格納（16バイトのネイティブ型、B-tree インデックス効率が最良）
-- **外部 ID（URL・API レスポンス）**: UUID v7 を **base62** エンコードして短縮（36文字 → 22文字）
-- **内部 ID（DB・バックエンド間通信）**: UUID v7 をそのまま使用（標準フォーマット `xxxxxxxx-xxxx-7xxx-xxxx-xxxxxxxxxxxx`）
+本番環境（Vercel 等）で Next.js の ISR と Edge Runtime を活用する際の判断基準。
+
+### ISR（Incremental Static Regeneration）
+
+**適用箇所**: 完了済み指摘の詳細画面（`/issues/[id]`）
+
+| 判断基準 | 適用する | 適用しない |
+|---------|---------|-----------|
+| データの変更頻度 | Done（変更されない） | Open / In Progress（頻繁に更新） |
+| リアルタイム性 | 不要 | 必要（TanStack Query が適切） |
+| キャッシュ無効化 | `revalidateTag` で即時更新可能 | 即時反映が必須 |
+
+**理由**: Done に遷移した指摘は以降ステータスが変わらないため、静的生成してCDNキャッシュする恩恵が大きい。一方、アクティブな指摘（Open / In Progress）はステータス変更・コメント追加が頻繁に起こるため、クライアントフェッチによるリアルタイム性を優先する。Done 遷移時に `revalidateTag` を発行すれば、完了直後でも最新の内容が即座に反映される。
+
+### Edge Runtime
+
+**適用箇所**: 認証ミドルウェア（JWT 検証）
+
+| 判断基準 | Edge に置く | バックエンドに置く |
+|---------|-----------|-----------------|
+| Secret が不要 | JWT 検証（公開鍵のみ） | — |
+| Secret が必要 | — | APS トークン取得（Client Secret） |
+| 処理の性質 | 軽量な暗号演算 | 外部 API 呼び出し + キャッシュ管理 |
+
+**理由**: Edge Runtime はユーザーに最も近い CDN エッジノードで実行されるため、未認証リクエストをオリジンに到達させずにブロックできる（レイテンシ最小化）。JWT の署名検証は Web Crypto API だけで完結し、Edge Runtime の制約（Node.js 全 API が使えない）に収まる。
+
+APS の 2-legged OAuth は Client Secret を必要とするため、エッジ（クライアントに近い場所）に Secret を配置するのはセキュリティリスクになる。また、トークン取得は外部 API 呼び出し + キャッシュ管理を伴い、Edge Runtime の軽量・高速という特性に合わない。これはバックエンド側の責務として `infrastructure/external/` に隔離する（CLAUDE.md の制約事項参照）。
