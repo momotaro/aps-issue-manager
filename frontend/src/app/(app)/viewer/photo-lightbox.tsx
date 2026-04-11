@@ -2,14 +2,28 @@
 
 import { useCallback, useEffect } from "react";
 import { getPhotoUrl } from "@/lib/photo-url";
-import type { PhotoItem } from "@/repositories/issue-repository";
+
+/** Lightbox で表示する写真（Timeline のコメント添付 or 送信前 preview）。 */
+export type LightboxPhoto = {
+  id: string;
+  fileName: string;
+  /** 表示に使う URL。object URL（pending）または getPhotoUrl(storagePath) の結果。 */
+  src: string;
+};
 
 type PhotoLightboxProps = {
-  photos: PhotoItem[];
+  photos: readonly LightboxPhoto[];
   currentIndex: number;
   onClose: () => void;
   onNavigate: (index: number) => void;
 };
+
+/** 添付の `storagePath` を入力に LightboxPhoto を組み立てるヘルパー。 */
+export const toLightboxPhotoFromStoragePath = (
+  id: string,
+  fileName: string,
+  storagePath: string,
+): LightboxPhoto => ({ id, fileName, src: getPhotoUrl(storagePath) });
 
 export function PhotoLightbox({
   photos,
@@ -50,17 +64,14 @@ export function PhotoLightbox({
       aria-label="写真プレビュー"
       aria-modal="true"
     >
-      {/* Overlay */}
       <div className="absolute inset-0 bg-black/80" />
 
-      {/* Content */}
       {/* biome-ignore lint/a11y/useKeyWithClickEvents: stopPropagation only */}
       {/* biome-ignore lint/a11y/noStaticElementInteractions: stopPropagation only */}
       <div
         className="relative max-w-[90vw] max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Close button */}
         <button
           type="button"
           onClick={onClose}
@@ -83,15 +94,13 @@ export function PhotoLightbox({
           </svg>
         </button>
 
-        {/* Image — external MinIO URL, next/image requires config */}
-        {/* biome-ignore lint/performance/noImgElement: external MinIO URL */}
+        {/* biome-ignore lint/performance/noImgElement: external MinIO URL / object URL */}
         <img
-          src={getPhotoUrl(photo.storagePath)}
+          src={photo.src}
           alt={photo.fileName}
           className="max-w-[90vw] max-h-[80vh] rounded-lg object-contain"
         />
 
-        {/* Prev button */}
         {hasPrev && (
           <button
             type="button"
@@ -116,7 +125,6 @@ export function PhotoLightbox({
           </button>
         )}
 
-        {/* Next button */}
         {hasNext && (
           <button
             type="button"
@@ -141,7 +149,6 @@ export function PhotoLightbox({
           </button>
         )}
 
-        {/* Counter */}
         <p className="absolute bottom-2 left-1/2 -translate-x-1/2 text-white/80 text-sm font-medium">
           {currentIndex + 1} / {photos.length}
         </p>

@@ -32,7 +32,9 @@ export type IssueListItem = {
   readonly title: string;
   readonly status: IssueStatus;
   readonly category: IssueCategory;
+  readonly reporterId: UserId;
   readonly reporterName: string | null;
+  readonly assigneeId: UserId | null;
   readonly assigneeName: string | null;
   readonly position: Position;
   readonly createdAt: Date;

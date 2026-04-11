@@ -7,7 +7,11 @@ import type {
   IssueQueryService,
   QueryOptions,
 } from "../../domain/repositories/issueQueryService.js";
-import type { IssueId } from "../../domain/valueObjects/brandedId.js";
+import type {
+  IssueId,
+  ProjectId,
+  UserId,
+} from "../../domain/valueObjects/brandedId.js";
 import { parseId } from "../../domain/valueObjects/brandedId.js";
 import type { Comment } from "../../domain/valueObjects/comment.js";
 import type { IssueCategory } from "../../domain/valueObjects/issueCategory.js";
@@ -132,12 +136,14 @@ const toListItem = (
   row: ReadRow,
   nameMap: Map<string, string>,
 ): IssueListItem => ({
-  id: parseId(row.id),
-  projectId: parseId(row.projectId),
+  id: parseId<IssueId>(row.id),
+  projectId: parseId<ProjectId>(row.projectId),
   title: row.title,
   status: row.status as IssueStatus,
   category: row.category as IssueCategory,
+  reporterId: parseId<UserId>(row.reporterId),
   reporterName: nameMap.get(row.reporterId) ?? null,
+  assigneeId: row.assigneeId ? parseId<UserId>(row.assigneeId) : null,
   assigneeName: row.assigneeId ? (nameMap.get(row.assigneeId) ?? null) : null,
   position: row.positionData as unknown as Position,
   createdAt: row.createdAt,

@@ -59,21 +59,6 @@ export const issueFiltersQuerySchema = z.object({
   sortOrder: z.enum(["asc", "desc"]).optional(),
 });
 
-export const updateTitleBodySchema = z.object({
-  title: z.string().trim().min(1).max(200),
-  actorId: base62IdSchema,
-});
-
-export const updateCategoryBodySchema = z.object({
-  category: z.enum(ISSUE_CATEGORIES),
-  actorId: base62IdSchema,
-});
-
-export const updateAssigneeBodySchema = z.object({
-  assigneeId: base62IdSchema.nullable(),
-  actorId: base62IdSchema,
-});
-
 export const updateIssueBodySchema = z.object({
   title: z.string().trim().min(1).max(200).optional(),
   category: z.enum(ISSUE_CATEGORIES).optional(),
@@ -118,9 +103,4 @@ export const addCommentBodySchema = z.object({
 export const generateUploadUrlBodySchema = z.object({
   commentId: base62IdSchema,
   fileName: safeFileNameSchema,
-});
-
-export const changeStatusBodySchema = z.object({
-  status: z.enum(ISSUE_STATUSES),
-  actorId: base62IdSchema,
 });

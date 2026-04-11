@@ -6,7 +6,7 @@ import { IssueFilter } from "./issue-filter";
 import type { IssueCategory, IssueStatus } from "./types";
 
 interface IssueListPanelProps {
-  issues: IssueListItem[];
+  issues: readonly IssueListItem[];
   isLoading: boolean;
   statusFilter: IssueStatus | undefined;
   categoryFilter: IssueCategory | undefined;

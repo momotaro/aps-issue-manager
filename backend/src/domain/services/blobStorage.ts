@@ -36,7 +36,7 @@ export type BlobStorage = {
     commentId: string,
     photoId: string,
     fileName: string,
-  ) => Promise<{ uploadUrl: string }>;
+  ) => Promise<{ uploadUrl: string; storagePath: string }>;
 
   /**
    * pending 状態のファイルを confirmed に移動する。

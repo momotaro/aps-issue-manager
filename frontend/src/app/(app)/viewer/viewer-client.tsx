@@ -1,16 +1,27 @@
 "use client";
 
+/**
+ * viewer ページのメインクライアントコンポーネント。
+ *
+ * @remarks
+ * レイアウト: `APSViewer (flex-1) | IssuePanel (400px) | IssueListPanel (320px)`
+ *
+ * - ピンクリック → `selectedIssueId` を更新し、IssuePanel が Edit モードに切り替わる
+ * - 「追加」ボタン → 配置モードへ、pendingPin + 事前 issueId を IssuePanel に渡して Add モード
+ * - ユーザー切替は Header の UserSwitcher から行う（mock ユーザー 2 名）
+ */
+
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSharedApsViewer } from "@/components/aps-viewer-provider";
 import { ViewerSlot } from "@/components/viewer-slot";
-import { TEMP_PROJECT_ID, TEMP_REPORTER_ID } from "@/lib/constants";
+import { TEMP_PROJECT_ID } from "@/lib/constants";
 import { generateBase62Id } from "@/lib/generate-id";
 import { useCameraNavigation } from "./camera-navigation.hooks";
+import { useIssueDetail } from "./issue-detail.hooks";
 import { useIssueFilters } from "./issue-filters.hooks";
-import { IssueFormPanel } from "./issue-form";
-import type { IssueFormValues } from "./issue-form.hooks";
 import { IssueListPanel } from "./issue-list-panel";
+import { IssuePanel, type PendingPinPayload } from "./issue-panel";
 import {
   EditingPinMarker,
   IssuePinsOverlay,
@@ -18,22 +29,9 @@ import {
   PlacementModeOverlay,
 } from "./issue-pins";
 import { useIssuePins } from "./issue-pins.hooks";
-import {
-  useCreateIssue,
-  useIssueList,
-  useIssues,
-  useUpdateIssue,
-} from "./issues-state.hooks";
+import { useIssueList, useIssues } from "./issues-state.hooks";
 import { useListPanel } from "./list-panel.hooks";
 import { ListToggleBar } from "./list-toggle-bar";
-import { PhotoComparison } from "./photo-comparison";
-import { PhotoLightbox } from "./photo-lightbox";
-import {
-  useDeletePhoto,
-  useIssueDetail,
-  usePhotoUpload,
-} from "./photo-upload.hooks";
-import { usePhotoViewer } from "./photo-viewer.hooks";
 import { usePlacementMode } from "./placement-mode.hooks";
 import type { IssuePin } from "./types";
 
@@ -41,6 +39,10 @@ import type { IssuePin } from "./types";
 const BASE62_RE = /^[0-9A-Za-z]{22}$/;
 
 export function ViewerClient() {
+  return <ViewerClientInner />;
+}
+
+function ViewerClientInner() {
   const searchParams = useSearchParams();
   const rawIssueId = searchParams.get("issueId");
   const targetIssueId =
@@ -52,8 +54,7 @@ export function ViewerClient() {
     isLoading: issuesLoading,
     error: issuesError,
   } = useIssues(TEMP_PROJECT_ID);
-  const createIssue = useCreateIssue();
-  const updateIssue = useUpdateIssue();
+
   const {
     isPlacementMode,
     pendingPin,
@@ -62,34 +63,56 @@ export function ViewerClient() {
     clearPendingPin,
   } = usePlacementMode(viewer);
 
-  // selectedPin を viewer-client で一元管理（一覧パネルとの共有のため）
-  const [selectedPin, setSelectedPin] = useState<IssuePin | null>(null);
-  // 編集中の Issue ID（追加フォームと排他的）
-  const [editingIssueId, setEditingIssueId] = useState<string | null>(null);
+  // 選択中の Issue ID（ピンクリック / 一覧クリックで更新）
+  const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
 
-  const { positions, handlePinClick, closePopup } = useIssuePins(
+  // Pin 選択
+  const selectedPin = selectedIssueId
+    ? (issues.find((p) => p.id === selectedIssueId) ?? null)
+    : null;
+
+  // issue-pins は Dispatch<SetStateAction<IssuePin|null>> を要求するため
+  // ID 状態に変換する薄いラッパーを通す
+  const setSelectedPin = useCallback<
+    React.Dispatch<React.SetStateAction<IssuePin | null>>
+  >(
+    (value) => {
+      setSelectedIssueId((currentId) => {
+        const currentPin = currentId
+          ? (issues.find((p) => p.id === currentId) ?? null)
+          : null;
+        const next =
+          typeof value === "function"
+            ? (value as (prev: IssuePin | null) => IssuePin | null)(currentPin)
+            : value;
+        return next?.id ?? null;
+      });
+    },
+    [issues],
+  );
+
+  const { positions, handlePinClick } = useIssuePins(
     viewer,
     issues,
     setSelectedPin,
   );
 
-  // pendingPin（追加中）と selectedPin（詳細表示中）は排他的
+  // pendingPin が立ったら selected をクリア
   useEffect(() => {
-    if (pendingPin) {
-      setSelectedPin(null);
-      setEditingIssueId(null);
-    }
+    if (pendingPin) setSelectedIssueId(null);
   }, [pendingPin]);
 
-  // editingIssueId が設定されたら pendingPin と selectedPin をクリア
-  useEffect(() => {
-    if (editingIssueId) {
-      clearPendingPin();
-      setSelectedPin(null);
-    }
-  }, [editingIssueId, clearPendingPin]);
+  // Add モード用の事前生成 issueId（pendingPin のライフサイクルに連動）
+  const preIssueIdRef = useRef<string | null>(null);
+  if (pendingPin && !preIssueIdRef.current) {
+    preIssueIdRef.current = generateBase62Id();
+  }
+  if (!pendingPin) {
+    preIssueIdRef.current = null;
+  }
+  const preIssueId = preIssueIdRef.current;
 
-  // List panel state
+  // List panel
   const {
     isOpen: isListOpen,
     open: openList,
@@ -101,70 +124,18 @@ export function ViewerClient() {
     filters,
   );
 
-  // パネル開閉時に APS Viewer をリサイズ
-  const isFormOpen = pendingPin !== null || editingIssueId !== null;
-  const formMode: "create" | "edit" =
-    editingIssueId !== null ? "edit" : "create";
+  // IssuePanel は「ピン選択中」または「追加モード」のときのみ表示する
+  const showIssuePanel =
+    selectedIssueId !== null || (pendingPin !== null && preIssueId !== null);
 
+  // パネル開閉時に APS Viewer をリサイズ
   useEffect(() => {
     if (!viewer) return;
-    // isListOpen / isFormOpen の変化でリサイズをトリガー
     void isListOpen;
-    void isFormOpen;
+    void showIssuePanel;
     const timer = setTimeout(() => viewer.resize(), 50);
     return () => clearTimeout(timer);
-  }, [viewer, isListOpen, isFormOpen]);
-
-  // Photo viewer state
-  const {
-    lightbox,
-    openLightbox,
-    closeLightbox,
-    navigateLightbox,
-    comparison,
-    openComparison,
-    closeComparison,
-  } = usePhotoViewer();
-
-  // フォーム表示時に事前生成する issueId（レンダリング中に同期的に設定）
-  const preIssueIdRef = useRef<string | null>(null);
-  if (pendingPin && !preIssueIdRef.current) {
-    preIssueIdRef.current = generateBase62Id();
-  }
-  if (!pendingPin) {
-    preIssueIdRef.current = null;
-  }
-  const preIssueId = preIssueIdRef.current;
-
-  // Issue detail: 選択中ピンの詳細（PinPopup 表示用）
-  const { data: selectedPinDetail } = useIssueDetail(selectedPin?.id ?? null);
-
-  // Issue detail: 編集対象の詳細（フォーム prefill 用）
-  const { data: editingIssueDetail } = useIssueDetail(editingIssueId);
-
-  // Issue detail: 写真操作のアクティブ対象（create 時は preIssueId、edit 時は editingIssueId）
-  const photoActiveIssueId = editingIssueId ?? preIssueId ?? comparison.issueId;
-  // preIssueId は作成成功後のみ detail を取得（未作成時は 404 になるため）
-  const issueDetailId =
-    (createIssue.isSuccess ? preIssueId : null) ??
-    editingIssueId ??
-    comparison.issueId;
-  const { data: issueDetail } = useIssueDetail(issueDetailId);
-  const {
-    uploading,
-    pendingConfirms,
-    addFiles,
-    confirmPending,
-    cleanup: cleanupUploads,
-  } = usePhotoUpload(photoActiveIssueId, TEMP_REPORTER_ID);
-  const deletePhoto = useDeletePhoto(photoActiveIssueId);
-
-  // モード切替（editingIssueId の変化）時に残留アップロードをクリア
-  // ※ このeffectは cleanupUploads の宣言後に置く必要がある
-  // biome-ignore lint/correctness/useExhaustiveDependencies: editingIssueId はエフェクトのトリガーとして必要だが本体では使用しない
-  useEffect(() => {
-    cleanupUploads();
-  }, [editingIssueId, cleanupUploads]);
+  }, [viewer, isListOpen, showIssuePanel]);
 
   const combinedLoading = isLoading || issuesLoading;
   const combinedError =
@@ -180,7 +151,6 @@ export function ViewerClient() {
 
   // issueId クエリパラメータによるカメラ移動（指摘一覧ページの 3D ボタンから遷移時）
   const { data: targetIssue } = useIssueDetail(targetIssueId);
-  // 最後にナビゲートした issueId を保持し、targetIssueId が変わったら再ナビゲートする
   const navigatedIssueIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (!targetIssue || !viewer) return;
@@ -192,7 +162,6 @@ export function ViewerClient() {
       navigatedIssueIdRef.current = targetIssue.id;
     };
 
-    // ジオメトリが完全にロードされてからカメラ移動
     if (viewer.model?.isLoadDone()) {
       doNavigate();
     } else {
@@ -216,272 +185,123 @@ export function ViewerClient() {
     }
   }, [targetIssue, viewer, navigateToIssue]);
 
-  // URL issueId に対応するピンの詳細カードを自動オープン
-  // issues と targetIssueId を別々に監視することで、issues が後から読み込まれても確実に pin を選択できる
+  // URL issueId に対応するピンを自動選択
   useEffect(() => {
     if (!targetIssueId) return;
-    const pin = issues.find((p) => p.id === targetIssueId);
-    if (pin) setSelectedPin(pin);
-  }, [targetIssueId, issues]);
+    setSelectedIssueId(targetIssueId);
+  }, [targetIssueId]);
 
   const handleAddFromList = useCallback(() => {
-    cleanupUploads(); // 編集モードの残留アップロードをクリア
-    closeComparison();
-    setSelectedPin(null);
-    setEditingIssueId(null);
+    setSelectedIssueId(null);
     enterPlacementMode();
-  }, [enterPlacementMode, cleanupUploads, closeComparison]);
+  }, [enterPlacementMode]);
 
   const handleCardClick = useCallback(
     (issue: (typeof issueList)[number]) => {
       navigateToIssue(issue);
-      const pin = issues.find((p) => p.id === issue.id);
-      if (pin) setSelectedPin(pin);
+      setSelectedIssueId(issue.id);
     },
-    [navigateToIssue, issues],
+    [navigateToIssue],
   );
 
-  const handleEditClick = useCallback(
-    (issueId: string) => {
-      cleanupUploads(); // 追加/別編集モードの残留アップロードをクリア
-      closeComparison();
-      setEditingIssueId(issueId);
-    },
-    [cleanupUploads, closeComparison],
-  );
+  const handlePanelClose = useCallback(() => {
+    setSelectedIssueId(null);
+    if (pendingPin) {
+      exitPlacementMode();
+      clearPendingPin();
+    }
+  }, [pendingPin, exitPlacementMode, clearPendingPin]);
 
-  const handleFormSubmit = useCallback(
-    (data: IssueFormValues) => {
-      if (formMode === "edit" && editingIssueId) {
-        updateIssue.mutate(
-          {
-            id: editingIssueId,
-            actorId: TEMP_REPORTER_ID,
-            // editingIssueDetail が未ロードの場合は空値を prev にして全フィールドを必ず送る
-            prev: editingIssueDetail
-              ? {
-                  title: editingIssueDetail.title,
-                  description: editingIssueDetail.description,
-                  category: editingIssueDetail.category,
-                  status: editingIssueDetail.status,
-                }
-              : {
-                  title: "",
-                  description: "",
-                  category: "quality_defect" as const,
-                  status: "open" as const,
-                },
-            next: {
-              title: data.title,
-              description: data.description,
-              category: data.category,
-              status: data.status,
-            },
-          },
-          {
-            onSuccess: () => {
-              // 写真を先に confirm してから cleanup する
-              confirmPending();
-              setEditingIssueId(null);
-              cleanupUploads();
-            },
-          },
-        );
-        return;
-      }
-
-      // Create mode
-      if (!pendingPin || !preIssueId) return;
-      createIssue.mutate(
-        {
-          issueId: preIssueId,
-          projectId: TEMP_PROJECT_ID,
-          title: data.title,
-          description: data.description,
-          category: data.category,
-          position: pendingPin.dbId
-            ? {
-                type: "component" as const,
-                dbId: pendingPin.dbId,
-                worldPosition: pendingPin.worldPosition,
-              }
-            : {
-                type: "spatial" as const,
-                worldPosition: pendingPin.worldPosition,
-              },
-          reporterId: TEMP_REPORTER_ID,
-        },
-        {
-          onSuccess: () => {
-            confirmPending();
-            createIssue.reset();
-            preIssueIdRef.current = null;
-            clearPendingPin();
-          },
-        },
-      );
-    },
-    [
-      formMode,
-      editingIssueId,
-      editingIssueDetail,
-      updateIssue,
-      cleanupUploads,
-      pendingPin,
-      preIssueId,
-      createIssue,
-      confirmPending,
-      clearPendingPin,
-    ],
-  );
-
-  const handleFormCancel = useCallback(() => {
+  const handleAddSuccess = useCallback(() => {
     preIssueIdRef.current = null;
-    createIssue.reset();
-    cleanupUploads();
-    exitPlacementMode();
     clearPendingPin();
-    setEditingIssueId(null);
-  }, [createIssue, cleanupUploads, exitPlacementMode, clearPendingPin]);
+    exitPlacementMode();
+  }, [clearPendingPin, exitPlacementMode]);
 
-  const handleDeletePhoto = useCallback(
-    (photoId: string) => {
-      deletePhoto.mutate({ photoId, actorId: TEMP_REPORTER_ID });
-    },
-    [deletePhoto],
-  );
-
-  const photos = issueDetail?.photos ?? [];
-
-  // 編集フォームの初期値
-  const editInitialValues = editingIssueDetail
+  // IssuePanel に渡す pendingPin ペイロード
+  const pendingPinPayload: PendingPinPayload | null = pendingPin
     ? {
-        title: editingIssueDetail.title,
-        description: editingIssueDetail.description,
-        category: editingIssueDetail.category,
-        status: editingIssueDetail.status,
+        worldPosition: pendingPin.worldPosition,
+        ...(pendingPin.dbId != null && { dbId: pendingPin.dbId }),
+        ...(pendingPin.objectName && { objectName: pendingPin.objectName }),
       }
-    : undefined;
-
-  // IssueFormPanel の right 位置: リストパネル表示時は 320px、非表示時は 36px
-  const formRightClass = isListOpen ? "right-80" : "right-9";
-
-  const isUpdating = updateIssue.isPending;
+    : null;
 
   return (
-    <div className="flex flex-1 overflow-hidden">
-      <main className="flex-1 relative">
-        {/* Persistent な APS Viewer の DOM をここに装着 */}
-        <ViewerSlot />
-        {/* 指摘追加モード中のオーバーレイバナー */}
-        {isPlacementMode && <PlacementModeOverlay />}
+    <div className="flex flex-col flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden">
+        <main className="flex-1 relative">
+          <ViewerSlot />
+          {isPlacementMode && <PlacementModeOverlay />}
 
-        {!combinedLoading && !combinedError && (
-          <>
-            <IssuePinsOverlay
-              positions={positions}
-              selectedPin={selectedPin}
-              onPinClick={isPlacementMode ? () => {} : handlePinClick}
-              onClose={closePopup}
-              onComparePhotos={openComparison}
-              onEdit={handleEditClick}
-              issueDetail={selectedPinDetail}
-            />
-            {pendingPin && (
-              <div className="absolute inset-0 pointer-events-none z-20">
-                <div
-                  className="absolute -translate-x-1/2 -translate-y-full"
-                  style={{
-                    left: pendingPin.screenPosition.x,
-                    top: pendingPin.screenPosition.y,
-                  }}
-                >
-                  <PendingPinMarker />
-                </div>
-              </div>
-            )}
-            {editingIssueId &&
-              (() => {
-                const editingPos = positions.find(
-                  (p) => p.pin.id === editingIssueId,
-                );
-                return editingPos?.visible ? (
-                  <div className="absolute inset-0 pointer-events-none z-20">
-                    <div
-                      className="absolute -translate-x-1/2 -translate-y-full"
-                      style={{ left: editingPos.x, top: editingPos.y }}
-                    >
-                      <EditingPinMarker status={editingPos.pin.status} />
-                    </div>
+          {!combinedLoading && !combinedError && (
+            <>
+              <IssuePinsOverlay
+                positions={positions}
+                selectedPin={selectedPin}
+                onPinClick={isPlacementMode ? () => {} : handlePinClick}
+              />
+              {pendingPin && (
+                <div className="absolute inset-0 pointer-events-none z-20">
+                  <div
+                    className="absolute -translate-x-1/2 -translate-y-full"
+                    style={{
+                      left: pendingPin.screenPosition.x,
+                      top: pendingPin.screenPosition.y,
+                    }}
+                  >
+                    <PendingPinMarker />
                   </div>
-                ) : null;
-              })()}
-          </>
+                </div>
+              )}
+              {selectedIssueId &&
+                (() => {
+                  const editingPos = positions.find(
+                    (p) => p.pin.id === selectedIssueId,
+                  );
+                  return editingPos?.visible ? (
+                    <div className="absolute inset-0 pointer-events-none z-20">
+                      <div
+                        className="absolute -translate-x-1/2 -translate-y-full"
+                        style={{ left: editingPos.x, top: editingPos.y }}
+                      >
+                        <EditingPinMarker status={editingPos.pin.status} />
+                      </div>
+                    </div>
+                  ) : null;
+                })()}
+            </>
+          )}
+        </main>
+
+        {showIssuePanel && (
+          <IssuePanel
+            selectedIssueId={selectedIssueId}
+            pendingPin={pendingPinPayload}
+            pendingIssueId={preIssueId}
+            projectId={TEMP_PROJECT_ID}
+            onClose={handlePanelClose}
+            onAddSuccess={handleAddSuccess}
+          />
         )}
 
-        {/* Photo Comparison overlay */}
-        {comparison.isOpen && comparison.issueId && (
-          <div className="absolute bottom-4 left-4 z-30 w-[480px]">
-            <PhotoComparison
-              photos={photos}
-              onClose={closeComparison}
-              onPhotoClick={openLightbox}
-            />
-          </div>
+        {isListOpen ? (
+          <IssueListPanel
+            issues={issueList}
+            isLoading={issueListLoading}
+            statusFilter={filters.status}
+            categoryFilter={filters.category}
+            onStatusChange={setStatus}
+            onCategoryChange={setCategory}
+            onAddClick={handleAddFromList}
+            onClose={closeList}
+            onCardClick={handleCardClick}
+            selectedIssueId={selectedIssueId ?? undefined}
+          />
+        ) : (
+          <ListToggleBar onOpen={openList} />
         )}
-      </main>
-
-      {isListOpen ? (
-        <IssueListPanel
-          issues={issueList}
-          isLoading={issueListLoading}
-          statusFilter={filters.status}
-          categoryFilter={filters.category}
-          onStatusChange={setStatus}
-          onCategoryChange={setCategory}
-          onAddClick={handleAddFromList}
-          onClose={closeList}
-          onCardClick={handleCardClick}
-          selectedIssueId={selectedPin?.id}
-        />
-      ) : (
-        <ListToggleBar onOpen={openList} />
-      )}
-
-      <IssueFormPanel
-        isOpen={isFormOpen}
-        mode={formMode}
-        resetKey={editingIssueId}
-        initialValues={
-          formMode === "edit"
-            ? editInitialValues
-            : pendingPin?.objectName
-              ? { title: pendingPin.objectName }
-              : undefined
-        }
-        onSubmit={handleFormSubmit}
-        onCancel={handleFormCancel}
-        isSubmitting={createIssue.isPending || isUpdating}
-        isUploading={uploading.length > 0}
-        photos={photos}
-        uploading={uploading}
-        pendingConfirms={pendingConfirms}
-        onFilesSelected={addFiles}
-        onDeletePhoto={handleDeletePhoto}
-        onPhotoClick={openLightbox}
-        isDeletePending={deletePhoto.isPending}
-        rightClass={formRightClass}
-      />
-
-      {/* Lightbox */}
-      {lightbox.isOpen && photos.length > 0 && (
-        <PhotoLightbox
-          photos={photos}
-          currentIndex={Math.min(lightbox.currentIndex, photos.length - 1)}
-          onClose={closeLightbox}
-          onNavigate={navigateLightbox}
-        />
-      )}
+      </div>
     </div>
   );
 }

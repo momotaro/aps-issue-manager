@@ -22,21 +22,17 @@ import type {
   ProjectId,
   UserId,
 } from "../../domain/valueObjects/brandedId.js";
-import { generateId, parseId } from "../../domain/valueObjects/brandedId.js";
+import { parseId } from "../../domain/valueObjects/brandedId.js";
 import type { Photo } from "../../domain/valueObjects/photo.js";
 import { mapResultErrorToStatus } from "../middleware/errorHandler.js";
 import {
   addCommentBodySchema,
-  changeStatusBodySchema,
   correctBodySchema,
   createIssueBodySchema,
   generateUploadUrlBodySchema,
   issueFiltersQuerySchema,
   reviewBodySchema,
-  updateAssigneeBodySchema,
-  updateCategoryBodySchema,
   updateIssueBodySchema,
-  updateTitleBodySchema,
 } from "../schemas/issueSchemas.js";
 import { base62ToUuid, uuidToBase62 } from "../serializers/externalId.js";
 import {
@@ -160,87 +156,6 @@ export const issueRoutes = new Hono()
       );
     return c.json({ ok: true });
   })
-  // --- レガシー個別更新（#34 でフロント移行後に削除） ---
-  .put("/:id/title", zValidator("json", updateTitleBodySchema), async (c) => {
-    const issueId = parseId<IssueId>(base62ToUuid(c.req.param("id")));
-    const body = c.req.valid("json");
-    const result = await updateIssue({
-      issueId,
-      title: body.title,
-      actorId: parseId<UserId>(base62ToUuid(body.actorId)),
-    });
-    if (!result.ok)
-      return c.json(
-        { error: result.error },
-        mapResultErrorToStatus(result.error.code),
-      );
-    return c.json({ ok: true });
-  })
-  .put(
-    "/:id/category",
-    zValidator("json", updateCategoryBodySchema),
-    async (c) => {
-      const issueId = parseId<IssueId>(base62ToUuid(c.req.param("id")));
-      const body = c.req.valid("json");
-      const result = await updateIssue({
-        issueId,
-        category: body.category,
-        actorId: parseId<UserId>(base62ToUuid(body.actorId)),
-      });
-      if (!result.ok)
-        return c.json(
-          { error: result.error },
-          mapResultErrorToStatus(result.error.code),
-        );
-      return c.json({ ok: true });
-    },
-  )
-  .put(
-    "/:id/assignee",
-    zValidator("json", updateAssigneeBodySchema),
-    async (c) => {
-      const issueId = parseId<IssueId>(base62ToUuid(c.req.param("id")));
-      const body = c.req.valid("json");
-      const result = await updateIssue({
-        issueId,
-        assigneeId: body.assigneeId
-          ? parseId<UserId>(base62ToUuid(body.assigneeId))
-          : null,
-        actorId: parseId<UserId>(base62ToUuid(body.actorId)),
-      });
-      if (!result.ok)
-        return c.json(
-          { error: result.error },
-          mapResultErrorToStatus(result.error.code),
-        );
-      return c.json({ ok: true });
-    },
-  )
-  // --- レガシーステータス変更（#34 でフロント移行後に削除） ---
-  .post(
-    "/:id/status",
-    zValidator("json", changeStatusBodySchema),
-    async (c) => {
-      const issueId = parseId<IssueId>(base62ToUuid(c.req.param("id")));
-      const body = c.req.valid("json");
-      // correct/review に統合されたが、レガシー互換のため reviewIssueUseCase で代替
-      const result = await reviewIssue({
-        issueId,
-        status: body.status,
-        actorId: parseId<UserId>(base62ToUuid(body.actorId)),
-        comment: {
-          commentId: generateId<CommentId>(),
-          body: `ステータスを ${body.status} に変更`,
-        },
-      });
-      if (!result.ok)
-        return c.json(
-          { error: result.error },
-          mapResultErrorToStatus(result.error.code),
-        );
-      return c.json({ ok: true });
-    },
-  )
   // --- ユースケース指向エンドポイント ---
   .post("/:id/correct", zValidator("json", correctBodySchema), async (c) => {
     const issueId = parseId<IssueId>(base62ToUuid(c.req.param("id")));
@@ -333,6 +248,7 @@ export const issueRoutes = new Hono()
       return c.json({
         photoId: uuidToBase62(result.value.photoId),
         uploadUrl: result.value.uploadUrl,
+        storagePath: result.value.storagePath,
       });
     },
   )

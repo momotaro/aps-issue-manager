@@ -20,6 +20,13 @@
 
 ## 2. 認証・認可
 
+### 現状（mock ユーザー）
+
+- 認証なし。`frontend/src/lib/mock-users.ts` に 2 名の mock ユーザー（監督会社 / 協力会社）を定義
+- `useCurrentUser()`（`frontend/src/components/current-user-provider.tsx` の React Context + `localStorage`）で切り替え、UserSwitcher UI で操作者を選択
+- Repository から `actorId` を body に含めて送信する暫定実装
+- **重要**: 現 UI のボタン出し分け（Composer の状態×ロール判定）は UX のためであり、**セキュリティ境界ではない**。クライアントが直接 API を叩けばロールを迂回できる
+
 ### 追加する場合の設計
 
 - Backend に認証ミドルウェアを追加（Hono middleware）
@@ -31,6 +38,32 @@
 
 - APS の 2-legged OAuth はサーバー間認証（ユーザー認証とは独立）
 - ユーザー認証を追加しても、APS トークン取得フローは変わらない
+
+### follow-up Issue として切り出し予定のスコープ
+
+#34（フロントエンドのユースケース指向 API 対応）の範囲外として、以下を独立 Issue で扱う:
+
+1. **認可ミドルウェア + `actorId` 廃止**
+   - backend に認証/認可ミドルウェアを導入し、ロールガード（IDOR 対策含む）を追加
+   - `actorId` をリクエスト body から廃止し、middleware のセッションから取得する方式に変更
+   - Composer の状態×ロール判定を backend 側でも強制し、UI 迂回を防ぐ
+   - 差し替えポイント: `frontend/src/lib/mock-users.ts` / `frontend/src/components/current-user-provider.tsx` / `frontend/src/repositories/issue-repository.ts` の `actorId` 送信箇所（`TODO(auth)` コメント）
+
+2. **Timeline コメントページネーション**
+   - `GET /:id/comments?before=<ISO8601>&limit=<n>` エンドポイントを新設
+   - `IssueQueryService.findCommentsBefore(issueId, before, limit)` を追加
+   - `listOlderCommentsUseCase` を追加
+   - フロント: `useIssueCommentsTimeline` に `hasMore` / `loadOlder()` を追加し、Timeline に LoadMore ボタンと loadOlder 後のスクロール位置維持を実装
+   - `.pen` に `LoadMore` ノードを復活
+   - #34 時点では `getIssueDetail.recentComments`（最新 5 件）のみ表示
+
+3. **EXIF ストリップ**
+   - 写真アップロード時（backend confirm フェーズ）に位置情報等の EXIF をサーバ側で除去
+   - プライバシー対策
+
+4. **Presigned URL の MIME / サイズ制約**
+   - backend の presigned URL 発行時に `Content-Type` と `Content-Length` 制約を付与
+   - 任意バイナリや過大サイズの投入をブロック
 
 ## 3. マルチユーザー対応
 
