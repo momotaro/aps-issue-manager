@@ -11,6 +11,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { formatDateTime } from "@/lib/format-date-time";
 import { findMockUserById } from "@/lib/mock-users";
 import type {
   CommentTimelineItem,
@@ -54,8 +55,20 @@ export function Timeline({ items, isLoading }: TimelineProps) {
     comment: CommentTimelineItem,
     attachmentIndex: number,
   ) => {
+    const user = findMockUserById(comment.actorId);
+    const commentContext = {
+      actorName: user?.name ?? "不明なユーザー",
+      actorColor: user?.color ?? "#9CA3AF",
+      createdAt: comment.createdAt,
+      commentBody: comment.body,
+    };
     const photos = comment.attachments.map((a) =>
-      toLightboxPhotoFromStoragePath(a.id, a.fileName, a.storagePath),
+      toLightboxPhotoFromStoragePath(
+        a.id,
+        a.fileName,
+        a.storagePath,
+        commentContext,
+      ),
     );
     setLightboxPhotos(photos);
     setLightboxIndex(attachmentIndex);
@@ -119,10 +132,7 @@ function CommentItemView({
   onAttachmentClick: (attachmentIndex: number) => void;
 }) {
   const user = findMockUserById(comment.actorId);
-  const date = new Date(comment.createdAt);
-  const timeStr = `${date.getMonth() + 1}/${date.getDate()} ${String(
-    date.getHours(),
-  ).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  const timeStr = formatDateTime(comment.createdAt);
 
   return (
     <div className="flex gap-2">
