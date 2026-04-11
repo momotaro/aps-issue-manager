@@ -4,8 +4,9 @@
 指摘（Issue）の登録・写真添付・ステータス管理・位置への再移動を一元的に行う。
 
 - 指摘に 3D 上の位置（部材 `dbId` / 空間 `worldPosition`）を紐づける
-- 写真（是正前 / 是正後）を複数枚添付できる
+- 写真（是正前 / 是正後）を複数枚添付し、Lightbox で投稿者・コメントと一緒に閲覧できる
 - ステータス（Open / In Progress / In Review / Done）を遷移管理する
+- コメント・ステータス変更・編集履歴を 1 本のタイムラインとして一覧できる
 - 一覧から 3D 上の該当箇所へ即座に移動できる
 
 ---
@@ -49,11 +50,13 @@ test_prj/
 │   └── src/
 │       ├── app/                 # ページ（App Router）
 │       ├── components/          # UI コンポーネント（*.tsx）+ ロジック（*.hooks.ts）
-│       └── repositories/        # データ取得の抽象化（TanStack Query）
+│       ├── repositories/        # データ取得の抽象化（TanStack Query）
+│       ├── lib/                 # API クライアント・写真 URL 生成・日時フォーマット等
+│       └── types/               # Issue 型・APS Viewer 型定義
 ├── backend/                     # Hono API サーバー（:4000）
 │   └── src/
 │       ├── presentation/routes/ # Hono ルート定義
-│       ├── application/useCases/# ユースケース（高階関数 DI）
+│       ├── application/useCases/# ユースケース（高階関数 DI, useCase 単位の粒度）
 │       ├── domain/
 │       │   ├── entities/        # Issue 集約（applyEvent, rehydrate, コマンド関数）
 │       │   ├── events/          # ドメインイベント型定義
@@ -61,7 +64,8 @@ test_prj/
 │       │   ├── repositories/    # Repository / QueryService インターフェース
 │       │   └── services/        # BlobStorage インターフェース・エラー型
 │       ├── infrastructure/
-│       │   ├── persistence/     # Drizzle ORM + PostgreSQL 実装
+│       │   ├── adapter/         # PostgreSQL（Drizzle）接続
+│       │   ├── persistence/     # EventStore / IssueRepository 等の Drizzle 実装
 │       │   └── external/        # APS・MinIO クライアント実装
 │       └── compositionRoot.ts   # 依存の組み立て（DI ルート）
 ├── docker-compose.yml
@@ -81,7 +85,7 @@ docker compose up -d
 
 # テスト用 DB セットアップ（初回のみ）
 docker compose exec db psql -U postgres -c "CREATE DATABASE issue_management_test"
-DATABASE_URL="postgres://postgres:postgres@localhost:5432/issue_management_test" npx drizzle-kit push --config=backend/drizzle.config.ts
+DATABASE_URL="postgres://postgres:postgres@localhost:5432/issue_management_test" pnpm --filter backend exec drizzle-kit push
 
 # テスト実行（単体 + 結合）
 TEST_DATABASE_URL="postgres://postgres:postgres@localhost:5432/issue_management_test" pnpm --filter backend test
@@ -188,8 +192,19 @@ graph TB
 **フレームワーク依存の隔離（DI）**
 
 DI コンテナやデコレータを使わず、高階関数で依存を注入する。
-`init` 関数が依存を受け取りユースケース群を返す。ワイヤリングを `compositionRoot.ts` に集約し、
-テスト時はモックを差し替える（詳細はバックエンド設計参照）。
+各ユースケース（`application/useCases/*.ts`）は repository / service を引数に取るファクトリ関数として定義し、
+`compositionRoot.ts` が repository / service を組み立てて個別に export、
+ルート定義（`presentation/routes/*Routes.ts`）がそれらを import してユースケースを合成する。
+テスト時は compositionRoot をモックに差し替える（詳細はバックエンド設計参照）。
+
+**ユースケース指向の API**
+
+REST の単一リソース CRUD ではなく、ユースケース単位でエンドポイントを切る
+（例: `POST /issues/:id/correct`, `POST /issues/:id/review`, `POST /issues/:id/comments`,
+`POST /issues/:id/photos/upload-url`, `PUT /issues/:id`）。
+プレゼンテーション層は zod で入力を検証してユースケースに委譲するだけの薄い層になり、
+ユースケースがビジネスの意図を直接表現する。
+フロントエンドは Repository パターンの中でこれらを 1:1 に呼び出す。
 
 **型共有（Hono RPC）**
 

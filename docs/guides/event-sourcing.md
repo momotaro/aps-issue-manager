@@ -96,7 +96,7 @@ API レスポンス（DTO）
 | `IssueStatusChanged` | ステータス遷移 | `from`, `to` |
 | `IssueCategoryChanged` | 種別変更 | `category` |
 | `IssueAssigneeChanged` | 担当者変更 | `assigneeId` |
-| `CommentAdded` | コメント追加（immutable）| `comment`（`commentId`, `body`, `actorId`, `attachments`, `createdAt`） |
+| `CommentAdded` | コメント追加（immutable）| `{ comment: { commentId, body, actorId, attachments, createdAt } }`（`Comment` 値オブジェクトを `comment` キーの下にネストして保持） |
 
 ### イベントの構造
 
@@ -205,7 +205,7 @@ EventProjector.project([event])
 ## 9. JSONB と Date 型の取り扱い
 
 イベントペイロード（`issue_events.payload`）やスナップショット（`issue_snapshots.state`）、
-読み取りモデル（`issues_read.photos`）は JSONB カラムに保存される。
+読み取りモデル（`issues_read.recent_comments`）は JSONB カラムに保存される。
 JSONB シリアライズ時に `Date` 型は **ISO 8601 文字列に変換** されるため、
 復元時に明示的なパースが必要。
 
@@ -215,13 +215,13 @@ JSONB シリアライズ時に `Date` 型は **ISO 8601 文字列に変換** さ
 |------|------|
 | **保存時** | `Date` フィールドは `toISOString()` で正規化して保存 |
 | **復元時** | `new Date(stringValue)` でパースして `Date` に戻す |
-| **対象フィールド** | `Photo.uploadedAt`、スナップショットの `createdAt` / `updatedAt` |
+| **対象フィールド** | `Comment.createdAt`、`Photo.uploadedAt`、スナップショットの各 `Date` |
 
 ### 実装箇所
 
-- `eventStoreImpl.ts` — `restorePayloadDates()`: イベントペイロード内の Photo.uploadedAt を復元
-- `issueRepositoryImpl.ts` — `restorePhotoDates()` / `snapshotToJson()`: スナップショットの保存・復元
-- `issueQueryServiceImpl.ts` — `restorePhotoDates()`: 読み取りモデルの photos を復元
+- `eventStoreImpl.ts` — `restorePayloadDates()`: イベントペイロード内の Comment.createdAt / Photo.uploadedAt を復元
+- `issueRepositoryImpl.ts` — `snapshotToJson()` + `restoreCommentDates()`（`issueQueryServiceImpl` から import）でスナップショットを保存・復元
+- `issueQueryServiceImpl.ts` — `restoreCommentDates()`: 読み取りモデルの `recent_comments` を復元（内部で添付写真の `uploadedAt` も復元）
 
 **新たに Date 型のフィールドを JSONB 内に追加する場合は、上記の復元関数を必ず更新すること。**
 
@@ -231,13 +231,13 @@ JSONB シリアライズ時に `Date` 型は **ISO 8601 文字列に変換** さ
 
 - **スキーマ定義**: `backend/src/infrastructure/persistence/schema.ts`
 - **マイグレーション**: `backend/drizzle/`
-- **テーブル**: `users`, `projects`, `issue_events`, `issues_read`, `issue_snapshots`
+- **テーブル**: `users`, `projects`, `issue_events`, `issues_read`, `issue_snapshots`, `comments`
 
 ### 読み取りモデルの設計方針
 
 - カラムの NULL 許容性はドメイン型（`IssueDetail` 等）に合わせる
 - ドメインで `string` なら DB は `NOT NULL`、`string | null` なら NULL 許容
-- コレクション型（`photos` 等）は `NOT NULL DEFAULT '[]'` で空配列を保証
+- コレクション型（`recent_comments` 等）は `NOT NULL DEFAULT '[]'` で空配列を保証
 
 ## 11. 関連ファイル
 

@@ -13,13 +13,18 @@ DBにはメタデータ（ファイル名、パス、サイズ等）のみ保持
 
 ```
 1. Frontend → Backend: POST /api/issues/:id/photos/upload-url（commentId, fileName を送信）
-2. Backend: photoId 生成 → pending/{issueId}/{commentId}/{photoId}.{ext} への Presigned PUT URL を発行 → 返却
+2. Backend: photoId 生成 → pending/{issueId}/{commentId}/{photoId}.{ext} への Presigned PUT URL を発行 → photoId / uploadUrl / storagePath を返却
 3. Frontend → MinIO: Presigned PUT URL でファイルを直接アップロード
-4. Frontend → Backend: POST /api/issues/:id/correct（または /comments）で attachments を含むコメントを送信
-5. Backend: DB にイベント（CommentAdded）を永続化
-6. Backend: MinIO のファイルを confirmed/{issueId}/{commentId}/{photoId}.{ext} に移動（CopyObject + Delete）
+4. Frontend → Backend: 以下のいずれかで attachments を含むコメントを送信
+   - POST /api/issues                    （新規指摘作成）
+   - POST /api/issues/:id/comments       （通常コメント）
+   - POST /api/issues/:id/correct        （是正コメント、任意で status 遷移）
+5. Backend: イベント（IssueCreated + CommentAdded、または CommentAdded 単独）を DB に永続化
+6. Backend: BlobStorage.confirmPending で pending/... を confirmed/{issueId}/{commentId}/{photoId}.{ext} に移動（copyObject + removeObject）
 7. Backend → Frontend: 完了レスポンス
 ```
+
+フロントエンド側に独立した confirm API は存在しない（backend の useCase 内部で実行）。
 
 ### Presigned URL 方式の利点
 

@@ -40,7 +40,12 @@ import {
 import type { PendingAttachment } from "./photo-upload.hooks";
 import { usePhotoUpload } from "./photo-upload.hooks";
 import { Timeline } from "./timeline";
-import { type IssueCategory, type IssueStatus, STATUS_LABELS } from "./types";
+import {
+  type IssueCategory,
+  type IssueStatus,
+  STATUS_COLORS,
+  STATUS_LABELS,
+} from "./types";
 
 export type PendingPinPayload = {
   worldPosition: { x: number; y: number; z: number };
@@ -405,6 +410,7 @@ function EditModePanel({
       <PanelHeader
         title="指摘詳細"
         statusLabel={statusLabel}
+        status={status}
         onClose={onClose}
         actions={
           isEditing ? (
@@ -467,20 +473,29 @@ function EditModePanel({
 function PanelHeader({
   title,
   statusLabel,
+  status,
   onClose,
   actions,
 }: {
   title: string;
   statusLabel: string;
+  status?: IssueStatus | null;
   onClose: () => void;
   actions?: ReactNode;
 }) {
+  const colors = status ? STATUS_COLORS[status] : null;
   return (
     <div className="flex items-center justify-between h-12 px-4 border-b border-zinc-200 shrink-0">
       <div className="flex items-center gap-2">
         <span className="text-sm font-semibold text-zinc-900">{title}</span>
         {statusLabel && (
-          <span className="inline-flex items-center rounded-md border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-[11px] font-medium text-zinc-600">
+          <span
+            className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-medium ${
+              colors
+                ? `${colors.bg} ${colors.text} border-transparent`
+                : "border border-zinc-200 bg-zinc-50 text-zinc-600"
+            }`}
+          >
             {statusLabel}
           </span>
         )}

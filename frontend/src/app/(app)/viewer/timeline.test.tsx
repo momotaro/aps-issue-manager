@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import type {
   CommentTimelineItem,
@@ -88,6 +88,59 @@ describe("Timeline", () => {
     ];
     render(<Timeline issueId="i1" items={items} isLoading={false} />);
     expect(screen.getByLabelText("添付画像: photo.jpg")).toBeDefined();
+  });
+
+  it("添付画像クリックで lightbox に投稿者名・日時・コメント本文が表示される", () => {
+    // actorId "000000002dwHTRTFRxWLTN" → MOCK_USER_SUPERVISOR: "田中（監督会社）"
+    const items: TimelineItem[] = [
+      makeCommentItem({
+        body: "是正前の状態です",
+        createdAt: "2026-04-10T14:00:00.000Z",
+        attachments: [
+          {
+            id: "p000000000000000000001",
+            fileName: "photo.jpg",
+            storagePath:
+              "confirmed/i000000000000000000001/c000000000000000000001/p000000000000000000001.jpg",
+            uploadedAt: "2026-04-10T14:00:00.000Z",
+          },
+        ],
+      }),
+    ];
+    render(<Timeline issueId="i1" items={items} isLoading={false} />);
+
+    fireEvent.click(screen.getByLabelText("添付画像: photo.jpg"));
+
+    // lightbox が開き、ページカウンタが表示される
+    expect(screen.getByText("1 / 1")).toBeDefined();
+    // 情報パネル: 投稿者名（timeline + lightbox の 2 箇所に存在）
+    expect(screen.getAllByText("田中（監督会社）").length).toBe(2);
+    // 情報パネル: 投稿日時（TZ=UTC: "4/10 14:00"）
+    expect(screen.getAllByText("4/10 14:00").length).toBe(2);
+    // 情報パネル: コメント本文（timeline + lightbox の 2 箇所に存在）
+    expect(screen.getAllByText("是正前の状態です").length).toBe(2);
+  });
+
+  it("lightbox の Escape キーで閉じる", () => {
+    const items: TimelineItem[] = [
+      makeCommentItem({
+        attachments: [
+          {
+            id: "p000000000000000000001",
+            fileName: "photo.jpg",
+            storagePath: "confirmed/i1/c1/p1.jpg",
+            uploadedAt: "2026-04-10T14:00:00.000Z",
+          },
+        ],
+      }),
+    ];
+    render(<Timeline issueId="i1" items={items} isLoading={false} />);
+
+    fireEvent.click(screen.getByLabelText("添付画像: photo.jpg"));
+    expect(screen.getByText("1 / 1")).toBeDefined();
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByText("1 / 1")).toBeNull();
   });
 
   it("ステータス変更アイテムを pill 形式で表示する", () => {

@@ -11,6 +11,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { formatDateTime } from "@/lib/format-date-time";
 import { findMockUserById } from "@/lib/mock-users";
 import type {
   CommentTimelineItem,
@@ -22,6 +23,7 @@ import {
   PhotoLightbox,
   toLightboxPhotoFromStoragePath,
 } from "./photo-lightbox";
+import { STATUS_COLORS } from "./types";
 
 type TimelineProps = {
   issueId: string;
@@ -54,8 +56,20 @@ export function Timeline({ items, isLoading }: TimelineProps) {
     comment: CommentTimelineItem,
     attachmentIndex: number,
   ) => {
+    const user = findMockUserById(comment.actorId);
+    const commentContext = {
+      actorName: user?.name ?? "不明なユーザー",
+      actorColor: user?.color ?? "#9CA3AF",
+      createdAt: comment.createdAt,
+      commentBody: comment.body,
+    };
     const photos = comment.attachments.map((a) =>
-      toLightboxPhotoFromStoragePath(a.id, a.fileName, a.storagePath),
+      toLightboxPhotoFromStoragePath(
+        a.id,
+        a.fileName,
+        a.storagePath,
+        commentContext,
+      ),
     );
     setLightboxPhotos(photos);
     setLightboxIndex(attachmentIndex);
@@ -119,10 +133,7 @@ function CommentItemView({
   onAttachmentClick: (attachmentIndex: number) => void;
 }) {
   const user = findMockUserById(comment.actorId);
-  const date = new Date(comment.createdAt);
-  const timeStr = `${date.getMonth() + 1}/${date.getDate()} ${String(
-    date.getHours(),
-  ).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  const timeStr = formatDateTime(comment.createdAt);
 
   return (
     <div className="flex gap-2">
@@ -180,13 +191,16 @@ function CommentItemView({
 // ---------------------------------------------------------------------------
 
 function StatusChangeItemView({ item }: { item: StatusChangeTimelineItem }) {
+  const colors = STATUS_COLORS[item.toStatus];
   return (
     <div className="flex items-center gap-2 text-[11px] text-zinc-500">
       <div className="h-px flex-1 bg-zinc-200" />
-      <div className="flex items-center gap-1 rounded-full border border-zinc-200 bg-zinc-100 px-2.5 py-1">
+      <div className="flex items-center gap-1 rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1">
         <StatusChangeIcon toStatus={item.toStatus} />
         <span>
-          {item.actorName}が {item.toLabel} に変更しました
+          {item.actorName}が{" "}
+          <span className={`font-medium ${colors.text}`}>{item.toLabel}</span>{" "}
+          に変更しました
         </span>
       </div>
       <div className="h-px flex-1 bg-zinc-200" />

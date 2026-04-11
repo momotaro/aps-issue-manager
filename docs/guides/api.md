@@ -10,15 +10,19 @@
 ### エラーレスポンス
 
 ```json
-{ "error": { "code": "NOT_FOUND", "message": "Issue not found" } }
+{ "error": { "code": "ISSUE_NOT_FOUND", "message": "Issue not found" } }
 ```
 
-| コード | HTTP ステータス | 意味 |
+| コード（suffix 含む） | HTTP ステータス | 意味 |
 |--------|----------------|------|
-| `NOT_FOUND` | 404 | リソースが存在しない |
-| `INVALID_TRANSITION` | 422 | 許可されないステータス遷移 |
-| `CONCURRENCY_ERROR` | 409 | 楽観的同時実行制御の競合 |
-| `VALIDATION_ERROR` | 400 | バリデーションエラー |
+| `*_NOT_FOUND` | 404 | リソースが存在しない |
+| `INVALID_TRANSITION` | 409 | 許可されないステータス遷移 |
+| `CONCURRENCY_CONFLICT` | 409 | 楽観的同時実行制御の競合 |
+| `DUPLICATE_PHOTO` | 409 | 添付写真の重複 |
+| `EMPTY_TITLE`, `NO_CHANGE`, `NO_CHANGES`, `INVALID_FILE_EXTENSION` | 400 | バリデーションエラー |
+| それ以外（`SAVE_FAILED`, `QUERY_FAILED` 等） | 500 | サーバーエラー |
+
+マッピング詳細は `presentation/middleware/errorHandler.ts` の `mapResultErrorToStatus` を参照。
 
 ### 共通型
 
@@ -91,8 +95,8 @@ APS の 2-legged OAuth トークンを取得する。バックエンドでキャ
 | フィールド | 型 | 必須 | 制約 |
 |-----------|------|------|------|
 | `commentId` | string | Yes | base62（22 文字）、クライアント側で生成 |
-| `body` | string | Yes | 1〜10,000 文字 |
-| `attachments` | Photo[] | No | 添付写真（confirm 済み） |
+| `body` | string | Yes | 1〜2,000 文字（trim 後） |
+| `attachments` | Photo[] | No | 最大 10 件。各要素は `{ id, fileName, storagePath, uploadedAt }`。`storagePath` は `pending/` で始まる |
 
 **レスポンス**: `201 { "issueId": "..." }`
 
@@ -124,10 +128,11 @@ APS の 2-legged OAuth トークンを取得する。バックエンドでキャ
     "title": "手すり未設置",
     "status": "open",
     "category": "safety_hazard",
+    "reporterId": "...",
     "reporterName": "佐藤",
+    "assigneeId": "...",
     "assigneeName": "山本",
     "position": { "type": "spatial", "worldPosition": { "x": 1, "y": 2, "z": 3 } },
-    "photoCount": 2,
     "createdAt": "2026-04-10T00:00:00.000Z",
     "updatedAt": "2026-04-10T00:00:00.000Z"
   }
@@ -149,20 +154,23 @@ APS の 2-legged OAuth トークンを取得する。バックエンドでキャ
   "title": "手すり未設置",
   "status": "open",
   "category": "safety_hazard",
+  "reporterId": "...",
   "reporterName": "佐藤",
+  "assigneeId": "...",
   "assigneeName": "山本",
   "position": { "type": "spatial", "worldPosition": { "x": 1, "y": 2, "z": 3 } },
   "createdAt": "2026-04-10T00:00:00.000Z",
   "updatedAt": "2026-04-10T00:00:00.000Z",
   "recentComments": [
     {
-      "id": "...",
+      "commentId": "...",
       "body": "3F 東側通路に手すりが設置されていない",
-      "authorName": "佐藤",
+      "actorId": "...",
       "attachments": [
         {
           "id": "...",
           "fileName": "IMG_001.jpg",
+          "storagePath": "confirmed/{issueId}/{commentId}/{photoId}.jpg",
           "uploadedAt": "2026-04-10T00:00:00.000Z"
         }
       ],
@@ -172,32 +180,19 @@ APS の 2-legged OAuth トークンを取得する。バックエンドでキャ
 }
 ```
 
----
-
-### `PUT /api/issues/:id/title`
-
-タイトルを更新する。
-
-**リクエストボディ**
-
-| フィールド | 型 | 必須 | 制約 |
-|-----------|------|------|------|
-| `title` | string | Yes | 1〜200 文字 |
-| `actorId` | string | Yes | base62 |
-
-**レスポンス**: `200 { "ok": true }`
+`recentComments` は最新 5 件のみ。全コメントが必要な場合は `GET /api/issues/:id/history` で `CommentAdded` イベントを取得する。
 
 ---
 
 ### `PUT /api/issues/:id`
 
-指摘を一括更新する。
+指摘の基本情報を部分更新する。指定したフィールドのみ更新され、変更のないフィールドは無視される。
 
-**リクエストボディ**（すべて任意）
+**リクエストボディ**
 
 | フィールド | 型 | 必須 | 制約 |
 |-----------|------|------|------|
-| `title` | string | No | 1〜200 文字 |
+| `title` | string | No | 1〜200 文字（trim 後） |
 | `category` | string | No | Category 列挙値 |
 | `assigneeId` | string \| null | No | base62 or null（解除） |
 | `actorId` | string | Yes | base62 |
@@ -206,39 +201,10 @@ APS の 2-legged OAuth トークンを取得する。バックエンドでキャ
 
 ---
 
-### `PUT /api/issues/:id/category`
+### ステータス遷移エンドポイント
 
-種別を更新する。
-
-**リクエストボディ**
-
-| フィールド | 型 | 必須 | 制約 |
-|-----------|------|------|------|
-| `category` | string | Yes | Category 列挙値 |
-| `actorId` | string | Yes | base62 |
-
-**レスポンス**: `200 { "ok": true }`
-
----
-
-### `PUT /api/issues/:id/assignee`
-
-担当者を変更する。
-
-**リクエストボディ**
-
-| フィールド | 型 | 必須 | 制約 |
-|-----------|------|------|------|
-| `assigneeId` | string \| null | Yes | base62 or null（解除） |
-| `actorId` | string | Yes | base62 |
-
-**レスポンス**: `200 { "ok": true }`
-
----
-
-### `POST /api/issues/:id/status`
-
-ステータスを遷移する。
+ステータス遷移はコメント付きのユースケース指向エンドポイントで行う。
+直接 status のみを更新する汎用エンドポイントは提供しない（履歴上コメントが必須のため）。
 
 **許可される遷移**
 
@@ -248,63 +214,57 @@ open → in_progress → in_review → done
                   in_progress
 ```
 
-**リクエストボディ**
-
-| フィールド | 型 | 必須 | 制約 |
-|-----------|------|------|------|
-| `status` | string | Yes | Status 列挙値 |
-| `actorId` | string | Yes | base62 |
-
-**レスポンス**: `200 { "ok": true }`
-
-不正な遷移の場合: `422 { "error": { "code": "INVALID_TRANSITION", ... } }`
-
----
-
 ### `POST /api/issues/:id/correct`
 
-是正開始する（open → in_progress）。
+是正コメントを追加し、必要ならステータスを `in_progress` に遷移する。
 
 **リクエストボディ**
 
 | フィールド | 型 | 必須 | 制約 |
 |-----------|------|------|------|
+| `status` | string | No | 指定した場合のみステータス遷移（例: `in_progress`）。省略時はコメント追加のみ |
 | `actorId` | string | Yes | base62 |
+| `comment.commentId` | string | Yes | base62（22 文字） |
+| `comment.body` | string | Yes | 1〜2,000 文字 |
+| `comment.attachments` | Photo[] | No | 最大 10 件（pending 添付） |
 
 **レスポンス**: `200 { "ok": true }`
 
-不正な遷移の場合: `422 { "error": { "code": "INVALID_TRANSITION", ... } }`
+不正な遷移: `409 { "error": { "code": "INVALID_TRANSITION", ... } }`
 
 ---
 
 ### `POST /api/issues/:id/review`
 
-是正完了・レビュー依頼する（in_progress → in_review）。
+レビュー依頼コメントを追加し、必要ならステータスを `in_review` / `done` に遷移する。
 
 **リクエストボディ**
 
 | フィールド | 型 | 必須 | 制約 |
 |-----------|------|------|------|
+| `status` | string | No | 指定した場合のみステータス遷移 |
 | `actorId` | string | Yes | base62 |
+| `comment.commentId` | string | Yes | base62 |
+| `comment.body` | string | Yes | 1〜2,000 文字 |
+
+**レビューコメントには添付写真は付けられない** — `attachments` は受け付けない。
 
 **レスポンス**: `200 { "ok": true }`
-
-不正な遷移の場合: `422 { "error": { "code": "INVALID_TRANSITION", ... } }`
 
 ---
 
 ### `POST /api/issues/:id/comments`
 
-指摘にコメントを追加する。
+指摘に通常のコメントを追加する（ステータスは変更しない）。
 
 **リクエストボディ**
 
 | フィールド | 型 | 必須 | 制約 |
 |-----------|------|------|------|
-| `commentId` | string | Yes | base62（22 文字）、クライアント側で生成 |
-| `body` | string | Yes | 1〜10,000 文字 |
-| `attachments` | Photo[] | No | 添付写真（confirm 済み） |
 | `actorId` | string | Yes | base62 |
+| `comment.commentId` | string | Yes | base62（22 文字） |
+| `comment.body` | string | Yes | 1〜2,000 文字 |
+| `comment.attachments` | Photo[] | No | 最大 10 件（pending 添付） |
 
 **レスポンス**: `201 { "ok": true }`
 
@@ -330,15 +290,36 @@ open → in_progress → in_review → done
     "id": "...",
     "issueId": "...",
     "type": "IssueCreated",
-    "payload": { "title": "手すり未設置", "..." : "..." },
+    "payload": { "projectId": "...", "title": "手すり未設置", "status": "open", "category": "safety_hazard", "position": { "type": "spatial", "worldPosition": { "x": 1, "y": 2, "z": 3 } }, "reporterId": "...", "assigneeId": null },
     "actorId": "...",
     "version": 1,
+    "occurredAt": "2026-04-10T00:00:00.000Z"
+  },
+  {
+    "id": "...",
+    "issueId": "...",
+    "type": "CommentAdded",
+    "payload": {
+      "comment": {
+        "commentId": "...",
+        "body": "3F 東側通路に手すりが設置されていない",
+        "actorId": "...",
+        "attachments": [
+          { "id": "...", "fileName": "IMG_001.jpg", "storagePath": "confirmed/...", "uploadedAt": "2026-04-10T00:00:00.000Z" }
+        ],
+        "createdAt": "2026-04-10T00:00:00.000Z"
+      }
+    },
+    "actorId": "...",
+    "version": 2,
     "occurredAt": "2026-04-10T00:00:00.000Z"
   }
 ]
 ```
 
 **イベント型一覧**: `IssueCreated`, `IssueTitleUpdated`, `IssueStatusChanged`, `IssueCategoryChanged`, `IssueAssigneeChanged`, `CommentAdded`
+
+各イベントの payload 構造は `domain/events/issueEvents.ts` を参照。`CommentAdded` のみ `{ comment: {...} }` とネストし、それ以外は payload 直下にフィールドが並ぶ。
 
 ---
 
@@ -355,9 +336,12 @@ open → in_progress → in_review → done
 | `fileName` | string | Yes | 1〜255 文字、パス区切り・`..` 禁止 |
 | `commentId` | string | Yes | base62（対象コメントの ID） |
 
-**レスポンス**: `200 { "photoId": "...", "uploadUrl": "..." }`
+**レスポンス**: `200 { "photoId": "...", "uploadUrl": "...", "storagePath": "pending/{issueId}/{commentId}/{photoId}.{ext}" }`
 
 フロントエンドは返された `uploadUrl` に対して直接 PUT でファイルをアップロードする。
+`storagePath` はコメント送信時の `attachments` にそのまま含める。
+
+**confirm API は存在しない**: pending → confirmed の移動は `POST /api/issues/:id/comments`（および `/correct`, `/` create）の中で、backend の useCase が attachments を受け取った時点で行う。フロント側は confirm API を呼ぶ必要はない。
 
 ---
 
