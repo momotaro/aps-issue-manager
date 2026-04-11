@@ -216,7 +216,7 @@ function EditModePanel({
   onClose: () => void;
 }) {
   const { currentUser } = useCurrentUser();
-  const { data: detail } = useIssueDetail(issueId);
+  const { data: detail, isLoading: detailLoading } = useIssueDetail(issueId);
   const { comments, isLoading: commentsLoading } =
     useIssueCommentsTimeline(issueId);
 
@@ -253,7 +253,10 @@ function EditModePanel({
   // Composer の draft 本文は独立 state（form に乗せない）
   const [draftBody, setDraftBody] = useDraftBody(issueId);
 
+  // detail が未ロードの間は Composer を操作不能にする（送信後のフィールドが
+  // 揃っていないためだが、ユーザーには明示的にボタンが disabled に見える必要がある）
   const isPending =
+    detailLoading ||
     updateIssue.isPending ||
     correctIssue.isPending ||
     reviewIssue.isPending ||
@@ -274,7 +277,9 @@ function EditModePanel({
   };
 
   const handleComposerAction = (action: ComposerAction) => {
-    if (!detail) return;
+    // Composer は detailLoading 中は isPending で disabled のため、
+    // 基本的にここには到達しないが、防御的に issueId/actorId のみで
+    // mutation を組み立てる（detail には依存しない）。
     const common = {
       id: issueId,
       actorId: currentUser.id,

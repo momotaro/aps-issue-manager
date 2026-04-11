@@ -23,7 +23,7 @@
 ### 現状（mock ユーザー）
 
 - 認証なし。`frontend/src/lib/mock-users.ts` に 2 名の mock ユーザー（監督会社 / 協力会社）を定義
-- `useCurrentUser()` (zustand + persist) で切り替え、UserSwitcher UI で操作者を選択
+- `useCurrentUser()`（`frontend/src/components/current-user-provider.tsx` の React Context + `localStorage`）で切り替え、UserSwitcher UI で操作者を選択
 - Repository から `actorId` を body に含めて送信する暫定実装
 - **重要**: 現 UI のボタン出し分け（Composer の状態×ロール判定）は UX のためであり、**セキュリティ境界ではない**。クライアントが直接 API を叩けばロールを迂回できる
 
@@ -47,7 +47,7 @@
    - backend に認証/認可ミドルウェアを導入し、ロールガード（IDOR 対策含む）を追加
    - `actorId` をリクエスト body から廃止し、middleware のセッションから取得する方式に変更
    - Composer の状態×ロール判定を backend 側でも強制し、UI 迂回を防ぐ
-   - 差し替えポイント: `frontend/src/lib/mock-users.ts` / `current-user.hooks.ts` / `issue-repository.ts` の `actorId` 送信箇所（`TODO(auth)` コメント）
+   - 差し替えポイント: `frontend/src/lib/mock-users.ts` / `frontend/src/components/current-user-provider.tsx` / `frontend/src/repositories/issue-repository.ts` の `actorId` 送信箇所（`TODO(auth)` コメント）
 
 2. **Timeline コメントページネーション**
    - `GET /:id/comments?before=<ISO8601>&limit=<n>` エンドポイントを新設

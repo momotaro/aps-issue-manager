@@ -15,14 +15,18 @@ export const UserSwitcher = () => {
   const { currentUser, switchUser } = useCurrentUser();
 
   return (
-    <div className="flex items-center gap-0 rounded-md border border-zinc-700 p-0.5">
+    <fieldset className="flex items-center gap-0 rounded-md border border-zinc-700 p-0.5">
+      <legend className="sr-only">ログインユーザー切替</legend>
       {MOCK_USERS.map((user) => {
         const isActive = currentUser.id === user.id;
+        const label = user.company === "supervisor" ? "監督会社" : "協力会社";
         return (
           <button
             key={user.id}
             type="button"
             onClick={() => switchUser(user.id)}
+            aria-pressed={isActive}
+            aria-label={`${label} としてログイン`}
             className={`flex items-center gap-1.5 rounded px-2.5 py-1 text-[11px] font-medium transition-colors ${
               isActive
                 ? "bg-white text-zinc-900"
@@ -30,13 +34,14 @@ export const UserSwitcher = () => {
             }`}
           >
             <span
+              aria-hidden="true"
               className="inline-block h-3.5 w-3.5 rounded-full"
               style={{ backgroundColor: user.color }}
             />
-            {user.company === "supervisor" ? "監督会社" : "協力会社"}
+            {label}
           </button>
         );
       })}
-    </div>
+    </fieldset>
   );
 };

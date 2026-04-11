@@ -37,16 +37,23 @@ const api = app
   .route("/api/users", userRoutes)
   .route("/api/projects", projectRoutes);
 
-// mock ユーザーを users テーブルに冪等に投入（認証導入 Issue で削除予定）
-// production では実行しない（本番環境に固定 UUID の admin/member を注入しないため）
-if (process.env.NODE_ENV !== "production") {
-  seedMockUsers(db)
-    .then(() => console.log("Mock users seeded"))
-    .catch((err) => console.error("Failed to seed mock users:", err));
+// mock ユーザー seed（非 production のみ）を完了してからサーバを起動する。
+// fire-and-forget だと起動直後のリクエストが seed 完了前に走り得るため、
+// 明示的に await してレースを避ける。
+async function bootstrap(): Promise<void> {
+  if (process.env.NODE_ENV !== "production") {
+    await seedMockUsers(db);
+    console.log("Mock users seeded");
+  }
+
+  serve({ fetch: app.fetch, port: 4000 }, (info) => {
+    console.log(`Server running at http://localhost:${info.port}`);
+  });
 }
 
-serve({ fetch: app.fetch, port: 4000 }, (info) => {
-  console.log(`Server running at http://localhost:${info.port}`);
+bootstrap().catch((err) => {
+  console.error("Failed to start server:", err);
+  process.exit(1);
 });
 
 export default app;
