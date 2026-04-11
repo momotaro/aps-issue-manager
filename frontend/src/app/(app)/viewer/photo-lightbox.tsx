@@ -93,16 +93,18 @@ export function PhotoLightbox({
     >
       <div className="absolute inset-0 bg-black/80" />
 
+      {/* コンテンツカード */}
       {/* biome-ignore lint/a11y/useKeyWithClickEvents: stopPropagation only */}
       {/* biome-ignore lint/a11y/noStaticElementInteractions: stopPropagation only */}
       <div
-        className="relative max-w-[90vw] max-h-[90vh] flex flex-col gap-2 overflow-y-auto"
+        className="relative z-10 flex max-w-[90vw] flex-col gap-3 rounded-xl bg-neutral-900 p-4 max-h-[90vh] overflow-y-auto overflow-x-hidden"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* 閉じるボタン */}
         <button
           type="button"
           onClick={onClose}
-          className="absolute -top-2 -right-2 z-10 flex items-center justify-center w-8 h-8 rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors"
+          className="absolute top-3 right-3 z-10 flex items-center justify-center w-8 h-8 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
           aria-label="閉じる"
         >
           <svg
@@ -121,63 +123,13 @@ export function PhotoLightbox({
           </svg>
         </button>
 
-        {/* 画像（ナビボタンを画像上に絶対配置するため相対コンテナで囲む） */}
-        <div className="relative">
-          {/* biome-ignore lint/performance/noImgElement: external MinIO URL / object URL */}
-          <img
-            src={photo.src}
-            alt={photo.fileName}
-            className="max-w-[90vw] max-h-[75vh] rounded-lg object-contain"
-          />
-
-          {hasPrev && (
-            <button
-              type="button"
-              onClick={handlePrev}
-              className="absolute left-2 top-1/2 -translate-y-1/2 flex items-center justify-center w-8 h-8 rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors"
-              aria-label="前の写真"
-            >
-              <svg
-                className="w-[18px] h-[18px]"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-                aria-hidden="true"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M15 19l-7-7 7-7"
-                />
-              </svg>
-            </button>
-          )}
-
-          {hasNext && (
-            <button
-              type="button"
-              onClick={handleNext}
-              className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center w-8 h-8 rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors"
-              aria-label="次の写真"
-            >
-              <svg
-                className="w-[18px] h-[18px]"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-                aria-hidden="true"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M9 5l7 7-7 7"
-                />
-              </svg>
-            </button>
-          )}
-        </div>
+        {/* 画像 */}
+        {/* biome-ignore lint/performance/noImgElement: external MinIO URL / object URL */}
+        <img
+          src={photo.src}
+          alt={photo.fileName}
+          className="w-full max-h-[65vh] rounded-lg object-contain"
+        />
 
         {/* 情報パネル（lbInfoPanel）: 投稿者・日時・コメント本文 */}
         {photo.actorName && photo.createdAt && (
@@ -205,9 +157,58 @@ export function PhotoLightbox({
           </div>
         )}
 
-        <p className="text-center text-sm font-medium text-white/80">
-          {currentIndex + 1} / {photos.length}
-        </p>
+        {/* ページネーション: [←] N / M [→] */}
+        <div className="flex items-center justify-center gap-3">
+          <button
+            type="button"
+            onClick={handlePrev}
+            disabled={!hasPrev}
+            className="flex items-center justify-center w-8 h-8 rounded-full bg-white/10 text-white transition-colors hover:bg-white/20 disabled:invisible"
+            aria-label="前の写真"
+          >
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M15 19l-7-7 7-7"
+              />
+            </svg>
+          </button>
+
+          <span className="min-w-[3ch] text-center text-sm font-medium text-white/50">
+            {currentIndex + 1} / {photos.length}
+          </span>
+
+          <button
+            type="button"
+            onClick={handleNext}
+            disabled={!hasNext}
+            className="flex items-center justify-center w-8 h-8 rounded-full bg-white/10 text-white transition-colors hover:bg-white/20 disabled:invisible"
+            aria-label="次の写真"
+          >
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M9 5l7 7-7 7"
+              />
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
   );

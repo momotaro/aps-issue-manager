@@ -23,6 +23,7 @@ import {
   PhotoLightbox,
   toLightboxPhotoFromStoragePath,
 } from "./photo-lightbox";
+import { STATUS_COLORS } from "./types";
 
 type TimelineProps = {
   issueId: string;
@@ -190,13 +191,16 @@ function CommentItemView({
 // ---------------------------------------------------------------------------
 
 function StatusChangeItemView({ item }: { item: StatusChangeTimelineItem }) {
+  const colors = STATUS_COLORS[item.toStatus];
   return (
     <div className="flex items-center gap-2 text-[11px] text-zinc-500">
       <div className="h-px flex-1 bg-zinc-200" />
-      <div className="flex items-center gap-1 rounded-full border border-zinc-200 bg-zinc-100 px-2.5 py-1">
+      <div className="flex items-center gap-1 rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1">
         <StatusChangeIcon toStatus={item.toStatus} />
         <span>
-          {item.actorName}が {item.toLabel} に変更しました
+          {item.actorName}が{" "}
+          <span className={`font-medium ${colors.text}`}>{item.toLabel}</span>{" "}
+          に変更しました
         </span>
       </div>
       <div className="h-px flex-1 bg-zinc-200" />
