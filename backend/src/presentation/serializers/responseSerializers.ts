@@ -31,7 +31,9 @@ export const serializeIssueListItem = (item: IssueListItem) => ({
   title: item.title,
   status: item.status,
   category: item.category,
+  reporterId: uuidToBase62(item.reporterId),
   reporterName: item.reporterName,
+  assigneeId: item.assigneeId ? uuidToBase62(item.assigneeId) : null,
   assigneeName: item.assigneeName,
   position: item.position,
   createdAt: item.createdAt.toISOString(),
@@ -47,6 +49,7 @@ export const serializeIssueDetail = (detail: IssueDetail) => ({
     attachments: c.attachments.map((p) => ({
       id: uuidToBase62(p.id),
       fileName: p.fileName,
+      storagePath: p.storagePath,
       uploadedAt: p.uploadedAt.toISOString(),
     })),
     createdAt: c.createdAt.toISOString(),

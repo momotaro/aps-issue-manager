@@ -1,8 +1,23 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+/**
+ * Composer 用の写真アップロードフック。
+ *
+ * @remarks
+ * ユースケース指向 API ではコメント送信時に `attachments` 配列を含めることで
+ * 写真とコメントを一括登録する。pending → confirmed の移動は backend useCase
+ * （`correctIssueUseCase` / `addCommentUseCase` 等）内で自動実行されるため、
+ * フロントから confirm API を呼ぶ必要はない。
+ *
+ * 使い方:
+ * - Composer は draft ごとに `commentId` を生成し、このフックに渡す
+ * - `addFiles(files[])` で選択されたファイルを即座にアップロード開始
+ * - 成功したものは `attachments` に追加される
+ * - コメント送信時に `attachments` をそのまま mutation に渡す
+ * - 送信成功後は `clear()` を呼ぶ
+ */
+
 import { useCallback, useRef, useState } from "react";
-import type { PhotoPhase } from "@/repositories/issue-repository";
 import { issueRepository } from "@/repositories/issue-repository";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -10,15 +25,17 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 export type UploadingPhoto = {
   localId: string;
   fileName: string;
-  phase: PhotoPhase;
   progress: number;
   previewUrl: string;
 };
 
-export type PendingConfirm = {
-  photoId: string;
+/** pending 状態の添付写真。コメント送信時にそのまま送る。 */
+export type PendingAttachment = {
+  id: string;
   fileName: string;
-  phase: PhotoPhase;
+  storagePath: string;
+  uploadedAt: string;
+  /** UI 表示用の preview URL（object URL）。送信には含めない。 */
   previewUrl: string;
 };
 
@@ -26,8 +43,6 @@ export type FileValidationError = {
   fileName: string;
   reason: "size" | "type" | "upload";
 };
-
-const ISSUE_DETAIL_KEY = (id: string) => ["issue-detail", id] as const;
 
 export function validateFile(file: File): FileValidationError | null {
   if (!file.type.startsWith("image/")) {
@@ -93,19 +108,27 @@ export function uploadToPresignedUrl(
   });
 }
 
-export function usePhotoUpload(issueId: string | null, actorId: string) {
+/**
+ * Composer の draft に紐づく写真アップロードフック。
+ *
+ * @param issueId - 対象 Issue の ID（新規作成時も既にクライアント側で決めておく）
+ * @param commentId - draft コメントの ID（Composer 側で生成してセット）
+ */
+export function usePhotoUpload(
+  issueId: string | null,
+  commentId: string | null,
+) {
   const [uploading, setUploading] = useState<UploadingPhoto[]>([]);
-  const [pendingConfirms, setPendingConfirms] = useState<PendingConfirm[]>([]);
+  const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
   const [errors, setErrors] = useState<FileValidationError[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
   const uploadingRef = useRef(uploading);
   uploadingRef.current = uploading;
-  const pendingConfirmsRef = useRef(pendingConfirms);
-  pendingConfirmsRef.current = pendingConfirms;
-  const queryClient = useQueryClient();
+  const attachmentsRef = useRef(attachments);
+  attachmentsRef.current = attachments;
 
   const doUpload = useCallback(
-    async (targetIssueId: string, files: File[], phase: PhotoPhase) => {
+    async (targetIssueId: string, targetCommentId: string, files: File[]) => {
       const controller =
         abortControllerRef.current && !abortControllerRef.current.signal.aborted
           ? abortControllerRef.current
@@ -118,17 +141,18 @@ export function usePhotoUpload(issueId: string | null, actorId: string) {
 
         setUploading((prev) => [
           ...prev,
-          { localId, fileName: file.name, phase, progress: 0, previewUrl },
+          { localId, fileName: file.name, progress: 0, previewUrl },
         ]);
 
         try {
           if (controller.signal.aborted) break;
 
-          const { photoId, uploadUrl } =
+          // storagePath は backend から返される pending/{...}（base62 ではなく実 MinIO キー）
+          const { photoId, uploadUrl, storagePath } =
             await issueRepository.generatePhotoUploadUrl(
               targetIssueId,
+              targetCommentId,
               file.name,
-              phase,
             );
 
           await uploadToPresignedUrl(
@@ -144,11 +168,17 @@ export function usePhotoUpload(issueId: string | null, actorId: string) {
             controller.signal,
           );
 
-          // アップロード完了 → pending confirm に追加（confirm は Issue 作成後）
+          // アップロード完了 → attachments に追加
           setUploading((prev) => prev.filter((p) => p.localId !== localId));
-          setPendingConfirms((prev) => [
+          setAttachments((prev) => [
             ...prev,
-            { photoId, fileName: file.name, phase, previewUrl },
+            {
+              id: photoId,
+              fileName: file.name,
+              storagePath,
+              uploadedAt: new Date().toISOString(),
+              previewUrl,
+            },
           ]);
         } catch (error) {
           URL.revokeObjectURL(previewUrl);
@@ -167,9 +197,8 @@ export function usePhotoUpload(issueId: string | null, actorId: string) {
     [],
   );
 
-  // ファイル選択時に即座にアップロード開始
   const addFiles = useCallback(
-    (files: File[], phase: PhotoPhase) => {
+    (files: File[]) => {
       const validationErrors: FileValidationError[] = [];
       const validFiles: File[] = [];
 
@@ -186,96 +215,58 @@ export function usePhotoUpload(issueId: string | null, actorId: string) {
         setErrors((prev) => [...prev, ...validationErrors]);
       }
 
-      if (!issueId || validFiles.length === 0) return;
+      if (!issueId || !commentId || validFiles.length === 0) return;
 
-      doUpload(issueId, validFiles, phase);
+      doUpload(issueId, commentId, validFiles);
     },
-    [issueId, doUpload],
+    [issueId, commentId, doUpload],
   );
 
-  // Issue 作成後に全 pending を一括 confirm
-  const confirmPending = useCallback(async () => {
-    if (!issueId) return;
-    const pending = pendingConfirmsRef.current;
-    for (const pc of pending) {
-      try {
-        await issueRepository.confirmPhotoUpload(
-          issueId,
-          pc.photoId,
-          pc.fileName,
-          pc.phase,
-          actorId,
-        );
-      } catch {
-        // confirm 失敗は致命的ではない — pending ファイルは TTL で自動削除
-      }
-    }
-    // confirm 完了後にプレビュー URL を解放
-    for (const pc of pending) {
-      URL.revokeObjectURL(pc.previewUrl);
-    }
-    setPendingConfirms([]);
-    queryClient.invalidateQueries({
-      queryKey: ISSUE_DETAIL_KEY(issueId),
+  const removeAttachment = useCallback((id: string) => {
+    setAttachments((prev) => {
+      const removed = prev.find((a) => a.id === id);
+      if (removed) URL.revokeObjectURL(removed.previewUrl);
+      return prev.filter((a) => a.id !== id);
     });
-    queryClient.invalidateQueries({ queryKey: ["issues"] });
-  }, [issueId, actorId, queryClient]);
+  }, []);
 
   const clearErrors = useCallback(() => setErrors([]), []);
 
+  /** 送信成功後に Composer から呼ぶ。attachments と uploading 状態をリセットする。 */
+  const clear = useCallback(() => {
+    for (const a of attachmentsRef.current) {
+      URL.revokeObjectURL(a.previewUrl);
+    }
+    for (const u of uploadingRef.current) {
+      URL.revokeObjectURL(u.previewUrl);
+    }
+    setAttachments([]);
+    setUploading([]);
+    setErrors([]);
+  }, []);
+
+  /** アンマウント時のクリーンアップ（アップロード中のものは abort）。 */
   const cleanup = useCallback(() => {
     abortControllerRef.current?.abort();
-    for (const photo of uploadingRef.current) {
-      URL.revokeObjectURL(photo.previewUrl);
+    for (const a of attachmentsRef.current) {
+      URL.revokeObjectURL(a.previewUrl);
     }
-    for (const pc of pendingConfirmsRef.current) {
-      URL.revokeObjectURL(pc.previewUrl);
+    for (const u of uploadingRef.current) {
+      URL.revokeObjectURL(u.previewUrl);
     }
+    setAttachments([]);
     setUploading([]);
-    setPendingConfirms([]);
     setErrors([]);
   }, []);
 
   return {
     uploading,
-    pendingConfirms,
+    attachments,
     errors,
     addFiles,
-    confirmPending,
+    removeAttachment,
     clearErrors,
+    clear,
     cleanup,
   };
-}
-
-export function useDeletePhoto(issueId: string | null) {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({
-      photoId,
-      actorId,
-    }: {
-      photoId: string;
-      actorId: string;
-    }) => {
-      if (!issueId) throw new Error("issueId is required");
-      return issueRepository.removePhoto(issueId, photoId, actorId);
-    },
-    onSuccess: () => {
-      if (issueId) {
-        queryClient.invalidateQueries({
-          queryKey: ISSUE_DETAIL_KEY(issueId),
-        });
-        queryClient.invalidateQueries({ queryKey: ["issues"] });
-      }
-    },
-  });
-}
-
-export function useIssueDetail(issueId: string | null) {
-  return useQuery({
-    queryKey: ISSUE_DETAIL_KEY(issueId ?? ""),
-    queryFn: () => issueRepository.getIssueDetail(issueId ?? ""),
-    enabled: !!issueId,
-  });
 }

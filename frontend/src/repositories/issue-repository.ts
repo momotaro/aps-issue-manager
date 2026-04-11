@@ -1,59 +1,73 @@
-import type { hc } from "hono/client";
-import { type AppType, apiClient } from "@/lib/api-client";
+import type { InferRequestType, InferResponseType } from "hono/client";
+import { apiClient } from "@/lib/api-client";
 import type { IssueCategory, IssueStatus } from "@/types/issue";
 
-type Client = ReturnType<typeof hc<AppType>>;
+// ---------------------------------------------------------------------------
+// 型定義（hono/rpc から導出）
+// ---------------------------------------------------------------------------
 
-export type PhotoPhase = "before" | "after";
+type IssueApi = (typeof apiClient.api.issues)[":id"];
 
-export type PhotoItem = {
+/** POST /api/issues の入力（body） */
+type CreateIssueJson = InferRequestType<
+  typeof apiClient.api.issues.$post
+>["json"];
+/** PUT /api/issues/:id の入力（body） */
+type UpdateIssueJson = InferRequestType<IssueApi["$put"]>["json"];
+/** POST /api/issues/:id/correct の入力（body） */
+type CorrectIssueJson = InferRequestType<IssueApi["correct"]["$post"]>["json"];
+/** POST /api/issues/:id/review の入力（body） */
+type ReviewIssueJson = InferRequestType<IssueApi["review"]["$post"]>["json"];
+/** POST /api/issues/:id/comments の入力（body） */
+type AddCommentJson = InferRequestType<IssueApi["comments"]["$post"]>["json"];
+/** POST /api/issues/:id/photos/upload-url の入力（body） */
+type UploadUrlJson = InferRequestType<
+  IssueApi["photos"]["upload-url"]["$post"]
+>["json"];
+
+/** GET /api/issues のレスポンス（成功時の配列要素）。 */
+type IssueListResponseItem = Extract<
+  InferResponseType<typeof apiClient.api.issues.$get>,
+  readonly unknown[]
+>[number];
+
+/** GET /api/issues/:id のレスポンス（成功時）。 */
+type IssueDetailResponse = Exclude<
+  InferResponseType<IssueApi["$get"]>,
+  { error: unknown }
+>;
+
+/** 指摘一覧の要素。AppType から導出。 */
+export type IssueListItem = IssueListResponseItem;
+
+/** 指摘詳細。`recentComments` を含む。AppType から導出。 */
+export type IssueDetail = IssueDetailResponse;
+
+/** Timeline に表示するコメント 1 件（`IssueDetail.recentComments[number]`）。 */
+export type CommentItem = IssueDetail["recentComments"][number];
+
+/** アップロード済みの pending 写真。コメント送信時に attachments として添付する。 */
+export type PendingAttachment = {
   id: string;
   fileName: string;
   storagePath: string;
-  phase: PhotoPhase;
   uploadedAt: string;
 };
 
-export type IssueListItem = {
-  id: string;
-  projectId: string;
-  title: string;
-  status: IssueStatus;
-  category: IssueCategory;
-  reporterName: string | null;
-  assigneeName: string | null;
-  position:
-    | { type: "spatial"; worldPosition: { x: number; y: number; z: number } }
-    | {
-        type: "component";
-        dbId: number;
-        worldPosition: { x: number; y: number; z: number };
-      };
-  photoCount: number;
-  createdAt: string;
-  updatedAt: string;
-};
+/** IssueForm から受け取る作成入力（comment を含む）。 */
+export type CreateIssueInput = CreateIssueJson;
 
-export type IssueDetail = IssueListItem & {
-  description: string;
-  photos: PhotoItem[];
-};
+// ---------------------------------------------------------------------------
+// Repository
+// ---------------------------------------------------------------------------
 
-export type CreateIssueInput = {
-  issueId: string;
-  projectId: string;
-  title: string;
-  description: string;
-  category: IssueCategory;
-  position:
-    | { type: "spatial"; worldPosition: { x: number; y: number; z: number } }
-    | {
-        type: "component";
-        dbId: number;
-        worldPosition: { x: number; y: number; z: number };
-      };
-  reporterId: string;
-  assigneeId?: string | null;
+// TODO(auth): 認証導入時は backend セッションから actorId を取得する形に切り替え、
+// クライアントから actorId を送信する箇所（createIssue 以外の引数 `actorId`）を廃止する。
+
+type Client = typeof apiClient;
+
+const defaultFetchOptions: RequestInit = {
+  credentials: "omit",
 };
 
 export const createIssueRepository = (client: Client) => ({
@@ -65,123 +79,121 @@ export const createIssueRepository = (client: Client) => ({
     q?: string;
     sortBy?: "createdAt" | "updatedAt";
     sortOrder?: "asc" | "desc";
-  }): Promise<IssueListItem[]> => {
-    const res = await client.api.issues.$get({
-      query: filters ?? {},
-    });
+  }): Promise<readonly IssueListItem[]> => {
+    const res = await client.api.issues.$get(
+      { query: filters ?? {} },
+      { init: defaultFetchOptions },
+    );
     if (!res.ok) throw new Error("Failed to fetch issues");
-    return (await res.json()) as IssueListItem[];
+    const data = (await res.json()) as unknown;
+    return data as readonly IssueListItem[];
   },
 
   getIssueDetail: async (id: string): Promise<IssueDetail> => {
-    const res = await client.api.issues[":id"].$get({
-      param: { id },
-    });
+    const res = await client.api.issues[":id"].$get(
+      { param: { id } },
+      { init: defaultFetchOptions },
+    );
     if (!res.ok) throw new Error("Failed to fetch issue detail");
-    return (await res.json()) as IssueDetail;
+    const data = (await res.json()) as unknown;
+    return data as IssueDetail;
   },
 
   createIssue: async (
     input: CreateIssueInput,
   ): Promise<{ issueId: string }> => {
-    const res = await client.api.issues.$post({
-      json: input,
-    });
+    const res = await client.api.issues.$post(
+      { json: input },
+      { init: defaultFetchOptions },
+    );
     if (!res.ok) throw new Error("Failed to create issue");
-    return (await res.json()) as { issueId: string };
+    const data = (await res.json()) as unknown;
+    return data as { issueId: string };
   },
 
-  changeIssueStatus: async (
+  updateIssue: async (
     id: string,
-    status: IssueStatus,
+    input: Omit<UpdateIssueJson, "actorId">,
     actorId: string,
   ): Promise<{ ok: true }> => {
-    const res = await client.api.issues[":id"].status.$post({
-      param: { id },
-      json: { status, actorId },
-    });
-    if (!res.ok) throw new Error("Failed to change issue status");
+    const res = await client.api.issues[":id"].$put(
+      {
+        param: { id },
+        json: { ...input, actorId } as UpdateIssueJson,
+      },
+      { init: defaultFetchOptions },
+    );
+    if (!res.ok) throw new Error("Failed to update issue");
     return (await res.json()) as { ok: true };
   },
 
-  updateTitle: async (
+  correctIssue: async (
     id: string,
-    title: string,
+    input: Omit<CorrectIssueJson, "actorId">,
     actorId: string,
   ): Promise<{ ok: true }> => {
-    const res = await client.api.issues[":id"].title.$put({
-      param: { id },
-      json: { title, actorId },
-    });
-    if (!res.ok) throw new Error("Failed to update issue title");
+    const res = await client.api.issues[":id"].correct.$post(
+      {
+        param: { id },
+        json: { ...input, actorId } as CorrectIssueJson,
+      },
+      { init: defaultFetchOptions },
+    );
+    if (!res.ok) throw new Error("Failed to mark issue as corrected");
     return (await res.json()) as { ok: true };
   },
 
-  updateDescription: async (
+  reviewIssue: async (
     id: string,
-    description: string,
+    input: Omit<ReviewIssueJson, "actorId">,
     actorId: string,
   ): Promise<{ ok: true }> => {
-    const res = await client.api.issues[":id"].description.$put({
-      param: { id },
-      json: { description, actorId },
-    });
-    if (!res.ok) throw new Error("Failed to update issue description");
+    const res = await client.api.issues[":id"].review.$post(
+      {
+        param: { id },
+        json: { ...input, actorId } as ReviewIssueJson,
+      },
+      { init: defaultFetchOptions },
+    );
+    if (!res.ok) throw new Error("Failed to review issue");
     return (await res.json()) as { ok: true };
   },
 
-  updateCategory: async (
+  addComment: async (
     id: string,
-    category: IssueCategory,
+    input: Omit<AddCommentJson, "actorId">,
     actorId: string,
   ): Promise<{ ok: true }> => {
-    const res = await client.api.issues[":id"].category.$put({
-      param: { id },
-      json: { category, actorId },
-    });
-    if (!res.ok) throw new Error("Failed to update issue category");
+    const res = await client.api.issues[":id"].comments.$post(
+      {
+        param: { id },
+        json: { ...input, actorId } as AddCommentJson,
+      },
+      { init: defaultFetchOptions },
+    );
+    if (!res.ok) throw new Error("Failed to add comment");
     return (await res.json()) as { ok: true };
   },
 
   generatePhotoUploadUrl: async (
     issueId: string,
+    commentId: string,
     fileName: string,
-    phase: PhotoPhase,
-  ): Promise<{ photoId: string; uploadUrl: string }> => {
-    const res = await client.api.issues[":id"].photos["upload-url"].$post({
-      param: { id: issueId },
-      json: { fileName, phase },
-    });
+  ): Promise<{ photoId: string; uploadUrl: string; storagePath: string }> => {
+    const json: UploadUrlJson = { commentId, fileName };
+    const res = await client.api.issues[":id"].photos["upload-url"].$post(
+      {
+        param: { id: issueId },
+        json,
+      },
+      { init: defaultFetchOptions },
+    );
     if (!res.ok) throw new Error("Failed to generate upload URL");
-    return (await res.json()) as { photoId: string; uploadUrl: string };
-  },
-
-  confirmPhotoUpload: async (
-    issueId: string,
-    photoId: string,
-    fileName: string,
-    phase: PhotoPhase,
-    actorId: string,
-  ): Promise<{ ok: true }> => {
-    const res = await client.api.issues[":id"].photos.confirm.$post({
-      param: { id: issueId },
-      json: { photoId, fileName, phase, actorId },
-    });
-    if (!res.ok) throw new Error("Failed to confirm photo upload");
-    return (await res.json()) as { ok: true };
-  },
-
-  removePhoto: async (
-    issueId: string,
-    photoId: string,
-    actorId: string,
-  ): Promise<{ ok: true }> => {
-    const res = await client.api.issues[":id"].photos[":photoId"].$delete({
-      param: { id: issueId, photoId },
-      json: { actorId },
-    });
-    if (!res.ok) throw new Error("Failed to remove photo");
-    return (await res.json()) as { ok: true };
+    return (await res.json()) as {
+      photoId: string;
+      uploadUrl: string;
+      storagePath: string;
+    };
   },
 });
 

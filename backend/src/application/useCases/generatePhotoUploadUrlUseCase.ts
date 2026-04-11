@@ -30,6 +30,8 @@ export type GeneratePhotoUploadUrlInput = {
 export type GeneratePhotoUploadUrlOutput = {
   readonly photoId: PhotoId;
   readonly uploadUrl: string;
+  /** MinIO 上の `pending/{issueId}/{commentId}/{photoId}.{ext}` パス（フロントがコメント送信時にそのまま attachment.storagePath に載せる）。 */
+  readonly storagePath: string;
 };
 
 /**
@@ -46,14 +48,14 @@ export const generatePhotoUploadUrlUseCase =
     const photoId = generateId<PhotoId>();
 
     try {
-      const { uploadUrl } = await blobStorage.generateUploadUrl(
+      const { uploadUrl, storagePath } = await blobStorage.generateUploadUrl(
         input.issueId,
         input.commentId,
         photoId,
         input.fileName,
       );
 
-      return { ok: true, value: { photoId, uploadUrl } };
+      return { ok: true, value: { photoId, uploadUrl, storagePath } };
     } catch (error: unknown) {
       const message =
         error instanceof Error

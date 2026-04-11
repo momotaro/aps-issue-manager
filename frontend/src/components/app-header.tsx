@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { UserSwitcher } from "./user-switcher";
 
 export function AppHeader() {
   const pathname = usePathname();
@@ -47,22 +48,9 @@ export function AppHeader() {
           指摘一覧
         </Link>
       </nav>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-4">
         <span className="text-[13px] text-zinc-400">現場A棟</span>
-        <svg
-          className="h-5 w-5 text-zinc-400"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          strokeWidth={2}
-          aria-hidden="true"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-          />
-        </svg>
+        <UserSwitcher />
       </div>
     </header>
   );

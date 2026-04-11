@@ -56,7 +56,9 @@ const listItem = {
   title: "テスト指摘",
   status: "open" as const,
   category: "quality_defect" as const,
+  reporterId: issueId, // 便宜上同じ UUID を流用
   reporterName: "テスト太郎",
+  assigneeId: null,
   assigneeName: null,
   position: { type: "spatial" as const, worldPosition: { x: 1, y: 2, z: 3 } },
   createdAt: new Date("2026-01-01T00:00:00Z"),

@@ -14,5 +14,4 @@ export interface IssuePin {
   status: IssueStatus;
   category: IssueCategory;
   worldPosition: { x: number; y: number; z: number };
-  photoCount: number;
 }

@@ -9,7 +9,6 @@ const pin1: IssuePin = {
   status: "open",
   category: "quality_defect",
   worldPosition: { x: 0, y: 0, z: 0 },
-  photoCount: 0,
 };
 
 const pin2: IssuePin = {
@@ -18,7 +17,6 @@ const pin2: IssuePin = {
   status: "in_progress",
   category: "safety_hazard",
   worldPosition: { x: 1, y: 1, z: 1 },
-  photoCount: 2,
 };
 
 describe("useIssuePins", () => {

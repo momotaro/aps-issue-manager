@@ -81,7 +81,7 @@ docker compose up -d
 
 # テスト用 DB セットアップ（初回のみ）
 docker compose exec db psql -U postgres -c "CREATE DATABASE issue_management_test"
-DATABASE_URL="postgres://postgres:postgres@localhost:5432/issue_management_test" npx drizzle-kit push
+DATABASE_URL="postgres://postgres:postgres@localhost:5432/issue_management_test" npx drizzle-kit push --config=backend/drizzle.config.ts
 
 # テスト実行（単体 + 結合）
 TEST_DATABASE_URL="postgres://postgres:postgres@localhost:5432/issue_management_test" pnpm --filter backend test

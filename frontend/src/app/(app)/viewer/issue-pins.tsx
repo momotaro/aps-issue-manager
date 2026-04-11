@@ -1,19 +1,10 @@
-import { getPhotoUrl } from "@/lib/photo-url";
-import type { IssueDetail } from "@/repositories/issue-repository";
-import { CATEGORY_LABELS, type IssuePin, type IssueStatus } from "./types";
+import type { IssuePin, IssueStatus } from "./types";
 
-const STATUS_CONFIG: Record<
-  IssueStatus,
-  { color: string; bg: string; label: string }
-> = {
-  open: { color: "bg-red-500", bg: "bg-red-50", label: "未対応" },
-  in_progress: {
-    color: "bg-amber-500",
-    bg: "bg-amber-50",
-    label: "対応中",
-  },
-  in_review: { color: "bg-blue-500", bg: "bg-blue-50", label: "レビュー中" },
-  done: { color: "bg-emerald-500", bg: "bg-emerald-50", label: "完了" },
+const STATUS_CONFIG: Record<IssueStatus, { color: string }> = {
+  open: { color: "bg-red-500" },
+  in_progress: { color: "bg-amber-500" },
+  in_review: { color: "bg-blue-500" },
+  done: { color: "bg-emerald-500" },
 };
 
 interface PinPosition {
@@ -27,20 +18,12 @@ interface IssuePinsOverlayProps {
   positions: PinPosition[];
   selectedPin: IssuePin | null;
   onPinClick: (pin: IssuePin) => void;
-  onClose: () => void;
-  onComparePhotos?: (issueId: string) => void;
-  onEdit?: (issueId: string) => void;
-  issueDetail?: IssueDetail | null;
 }
 
 export function IssuePinsOverlay({
   positions,
   selectedPin,
   onPinClick,
-  onClose,
-  onComparePhotos,
-  onEdit,
-  issueDetail,
 }: IssuePinsOverlayProps) {
   return (
     <div className="absolute inset-0 pointer-events-none z-20">
@@ -51,24 +34,17 @@ export function IssuePinsOverlay({
               key={pin.id}
               type="button"
               aria-label={`指摘: ${pin.title}`}
+              aria-pressed={selectedPin?.id === pin.id}
               className="absolute pointer-events-auto -translate-x-1/2 -translate-y-full group"
               style={{ left: x, top: y }}
               onClick={() => onPinClick(pin)}
             >
-              <PinMarker status={pin.status} />
+              <PinMarker
+                status={pin.status}
+                highlighted={selectedPin?.id === pin.id}
+              />
             </button>
           ),
-      )}
-
-      {selectedPin && (
-        <PinPopup
-          pin={selectedPin}
-          position={positions.find((p) => p.pin.id === selectedPin.id)}
-          onClose={onClose}
-          onComparePhotos={onComparePhotos}
-          onEdit={onEdit}
-          issueDetail={issueDetail}
-        />
       )}
     </div>
   );
@@ -113,7 +89,6 @@ export function EditingPinMarker({ status }: { status: IssueStatus }) {
             clipRule="evenodd"
           />
         </svg>
-        {/* 編集中バッジ */}
         <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-white shadow ring-1 ring-zinc-200">
           <svg
             className="h-2.5 w-2.5 text-zinc-700"
@@ -130,12 +105,19 @@ export function EditingPinMarker({ status }: { status: IssueStatus }) {
   );
 }
 
-export function PinMarker({ status }: { status: IssueStatus }) {
+export function PinMarker({
+  status,
+  highlighted = false,
+}: {
+  status: IssueStatus;
+  highlighted?: boolean;
+}) {
   const { color } = STATUS_CONFIG[status];
+  const ringClass = highlighted ? "ring-4 ring-blue-300" : "ring-2 ring-white";
   return (
     <div className="flex flex-col items-center">
       <div
-        className={`flex h-8 w-8 items-center justify-center rounded-full ${color} shadow-lg ring-2 ring-white transition-transform hover:scale-110`}
+        className={`flex h-8 w-8 items-center justify-center rounded-full ${color} shadow-lg ${ringClass} transition-transform hover:scale-110`}
       >
         <svg
           className="h-4 w-4 text-white"
@@ -152,176 +134,6 @@ export function PinMarker({ status }: { status: IssueStatus }) {
         </svg>
       </div>
       <div className={`h-2 w-0.5 ${color}`} />
-    </div>
-  );
-}
-
-function PinPopup({
-  pin,
-  position,
-  onClose,
-  onComparePhotos,
-  onEdit,
-  issueDetail,
-}: {
-  pin: IssuePin;
-  position: PinPosition | undefined;
-  onClose: () => void;
-  onComparePhotos?: (issueId: string) => void;
-  onEdit?: (issueId: string) => void;
-  issueDetail?: IssueDetail | null;
-}) {
-  if (!position?.visible) return null;
-
-  const { bg, label } = STATUS_CONFIG[pin.status];
-  const categoryLabel = CATEGORY_LABELS[pin.category];
-
-  // 写真は before 優先で最大2枚
-  const photos = issueDetail?.photos ?? [];
-  const beforePhotos = photos.filter((p) => p.phase === "before");
-  const afterPhotos = photos.filter((p) => p.phase === "after");
-  const thumbnails = [...beforePhotos, ...afterPhotos].slice(0, 2);
-  const hasPhotos = photos.length > 0;
-
-  return (
-    <div
-      className="absolute pointer-events-auto -translate-x-1/2 mb-2"
-      style={{ left: position.x, top: position.y - 56 }}
-    >
-      <div className="w-[280px] rounded-lg bg-white shadow-xl ring-1 ring-zinc-200 overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between px-3 py-2.5 border-b border-zinc-100">
-          <h3 className="text-sm font-semibold text-zinc-900 truncate pr-2">
-            {pin.title}
-          </h3>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="閉じる"
-            className="shrink-0 text-zinc-400 hover:text-zinc-600"
-          >
-            <svg
-              className="h-4 w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-              aria-hidden="true"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
-        </div>
-
-        {/* Body */}
-        <div className="px-3 py-3 space-y-3">
-          {/* Badges */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span
-              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${bg} text-zinc-700`}
-            >
-              <span
-                className={`h-1.5 w-1.5 rounded-full ${STATUS_CONFIG[pin.status].color}`}
-              />
-              {label}
-            </span>
-            <span className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600">
-              {categoryLabel}
-            </span>
-          </div>
-
-          {/* Description */}
-          {issueDetail?.description && (
-            <p className="text-xs text-zinc-500 line-clamp-3 leading-relaxed">
-              {issueDetail.description}
-            </p>
-          )}
-
-          {/* Photos */}
-          {hasPhotos && (
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-zinc-700">写真</span>
-                {onComparePhotos && (
-                  <button
-                    type="button"
-                    onClick={() => onComparePhotos(pin.id)}
-                    className="text-xs text-blue-600 hover:text-blue-800"
-                  >
-                    全て表示 →
-                  </button>
-                )}
-              </div>
-              <div className="flex gap-1.5">
-                {thumbnails.map((photo) => (
-                  <img
-                    key={photo.id}
-                    src={getPhotoUrl(photo.storagePath)}
-                    alt={photo.fileName}
-                    className="h-[60px] w-[60px] rounded object-cover bg-zinc-200"
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Show compare link even when no photos loaded but photoCount > 0 */}
-          {!hasPhotos && pin.photoCount > 0 && onComparePhotos && (
-            <button
-              type="button"
-              onClick={() => onComparePhotos(pin.id)}
-              className="flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-700"
-            >
-              <svg
-                className="w-3.5 h-3.5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-                aria-hidden="true"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z"
-                />
-              </svg>
-              {pin.photoCount}枚
-            </button>
-          )}
-        </div>
-
-        {/* Footer */}
-        {onEdit && (
-          <div className="px-3 py-2.5 border-t border-zinc-100">
-            <button
-              type="button"
-              onClick={() => onEdit(pin.id)}
-              className="flex w-full items-center justify-center gap-1.5 rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 transition-colors"
-            >
-              <svg
-                className="h-3.5 w-3.5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-                aria-hidden="true"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125"
-                />
-              </svg>
-              編集
-            </button>
-          </div>
-        )}
-      </div>
     </div>
   );
 }

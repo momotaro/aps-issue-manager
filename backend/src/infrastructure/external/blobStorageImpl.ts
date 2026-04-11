@@ -110,7 +110,7 @@ export const createBlobStorage = (
     commentId: string,
     photoId: string,
     fileName: string,
-  ): Promise<{ uploadUrl: string }> => {
+  ): Promise<{ uploadUrl: string; storagePath: string }> => {
     validateId(issueId, "issueId");
     validateId(commentId, "commentId");
     validateId(photoId, "photoId");
@@ -125,7 +125,7 @@ export const createBlobStorage = (
       PRESIGNED_URL_EXPIRY,
     );
 
-    return { uploadUrl };
+    return { uploadUrl, storagePath: key };
   },
 
   confirmPending: async (
